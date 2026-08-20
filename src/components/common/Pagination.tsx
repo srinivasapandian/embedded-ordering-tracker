@@ -31,7 +31,7 @@ export function Pagination({
   const computedOptions = Array.from(
     new Set(
       pageSizeOptions
-        .filter((opt, i) => i === 0 || pageSizeOptions[i - 1] < totalRows)
+        .filter((_, i) => i === 0 || pageSizeOptions[i - 1] < totalRows)
         .map((opt) => Math.min(opt, Math.max(totalRows, pageSizeOptions[0])))
     )
   )

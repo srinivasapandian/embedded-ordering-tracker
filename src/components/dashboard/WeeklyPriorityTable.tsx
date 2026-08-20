@@ -32,7 +32,6 @@ import { SearchInput } from '@/components/common/SearchInput'
 import { Select } from '@/components/common/Select'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { SortableHeader, TableShell } from '@/components/common/table'
-import { UserAvatar } from '@/components/common/UserAvatar'
 import { useAppStore } from '@/store/appStore'
 import { toast } from '@/store/toastStore'
 import {
@@ -41,7 +40,6 @@ import {
   type Priority,
   type PriorityItem,
   type PriorityItemStatus,
-  type TeamMember,
 } from '@/types'
 import { cn } from '@/utils/cn'
 import { fmtDate, isOverdue, shiftWeekKey, weekKeyOf, weekLabel, weekRangeLabel } from '@/utils/date'
@@ -53,7 +51,6 @@ import { PriorityFormModal } from './PriorityFormModal'
 
 interface PriorityRow extends PriorityItem {
   websiteName: string
-  member: TeamMember | undefined
 }
 
 /** Custom sort rank: high > medium > low (ascending puts High first). */
@@ -106,7 +103,6 @@ const columnHelper = createColumnHelper<PriorityRow>()
 export function WeeklyPriorityTable() {
   const priorities = useAppStore((s) => s.priorities)
   const websites = useAppStore((s) => s.websites)
-  const teamMembers = useAppStore((s) => s.teamMembers)
   const updatePriority = useAppStore((s) => s.updatePriority)
   const deletePriority = useAppStore((s) => s.deletePriority)
 
@@ -136,9 +132,8 @@ export function WeeklyPriorityTable() {
         .map((p) => ({
           ...p,
           websiteName: websites.find((w) => w.id === p.websiteId)?.name ?? 'Unknown website',
-          member: teamMembers.find((tm) => tm.id === p.assignedToId),
         })),
-    [priorities, websites, teamMembers, selectedWeek],
+    [priorities, websites, selectedWeek],
   )
 
   const filteredRows = useMemo(() => {
@@ -198,13 +193,6 @@ export function WeeklyPriorityTable() {
         header: ({ column }) => <SortableHeader column={column}>Priority</SortableHeader>,
         meta: { label: 'Priority' },
         cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
-      }),
-      columnHelper.accessor((r) => r.member?.name ?? 'Unassigned', {
-        id: 'assignee',
-        enableSorting: false,
-        header: 'Assigned To',
-        meta: { label: 'Assigned To' },
-        cell: ({ row }) => <UserAvatar member={row.original.member ?? null} size="sm" showName />,
       }),
       columnHelper.accessor('dueDate', {
         id: 'dueDate',

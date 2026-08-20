@@ -40,7 +40,6 @@ function FlashMetricCard({ spec, index }: { spec: CardSpec; index: number }) {
 /** "Client Onboarding Overview" — five ordering-status metric cards. */
 export function OnboardingOverview() {
   const websites = useAppStore((s) => s.websites)
-  const baseline = useAppStore((s) => s.baseline)
   const m = useMemo(() => onboardingMetrics(websites), [websites])
 
   const cards: CardSpec[] = [

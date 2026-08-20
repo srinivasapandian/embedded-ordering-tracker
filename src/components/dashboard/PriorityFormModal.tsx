@@ -23,8 +23,6 @@ const prioritySchema = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters'),
   websiteId: z.string().min(1, 'Select a website'),
   priority: z.enum(['high', 'medium', 'low']),
-  /** '' means unassigned — mapped to null on submit. */
-  assignedToId: z.string(),
   dueDate: z
     .string()
     .min(1, 'Due date is required')
@@ -38,7 +36,6 @@ const EMPTY_VALUES: PriorityFormValues = {
   title: '',
   websiteId: '',
   priority: 'medium',
-  assignedToId: '',
   dueDate: '',
   status: 'not-started',
 }
@@ -59,7 +56,6 @@ interface PriorityFormModalProps {
 
 export function PriorityFormModal({ open, onClose, editing, weekStart }: PriorityFormModalProps) {
   const websites = useAppStore((s) => s.websites)
-  const teamMembers = useAppStore((s) => s.teamMembers)
   const addPriority = useAppStore((s) => s.addPriority)
   const updatePriority = useAppStore((s) => s.updatePriority)
 
@@ -67,7 +63,6 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
     () => [...websites].sort((a, b) => a.name.localeCompare(b.name)),
     [websites],
   )
-  const activeMembers = useMemo(() => teamMembers.filter((tm) => tm.active), [teamMembers])
 
   const {
     register,
@@ -88,7 +83,6 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
             title: editing.title,
             websiteId: editing.websiteId,
             priority: editing.priority,
-            assignedToId: editing.assignedToId ?? '',
             dueDate: editing.dueDate,
             status: editing.status,
           }
@@ -101,7 +95,7 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
       title: values.title.trim(),
       websiteId: values.websiteId,
       priority: values.priority,
-      assignedToId: values.assignedToId === '' ? null : values.assignedToId,
+      assignedToId: null,
       dueDate: values.dueDate,
       status: values.status,
     }
@@ -170,17 +164,6 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
               {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
                 <option key={p} value={p}>
                   {PRIORITY_LABELS[p]}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField label="Assigned to" htmlFor="pf-assignee" error={errors.assignedToId?.message}>
-            <Select id="pf-assignee" {...register('assignedToId')}>
-              <option value="">Unassigned</option>
-              {activeMembers.map((tm) => (
-                <option key={tm.id} value={tm.id}>
-                  {tm.name}
                 </option>
               ))}
             </Select>

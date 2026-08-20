@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingDown, TrendingUp } from 'lucide-react'
 import { AnimatedNumber } from '@/components/common/AnimatedNumber'
 import { DonutChart } from '@/components/common/DonutChart'
 import { ProgressBar } from '@/components/common/ProgressBar'
@@ -44,11 +43,7 @@ function StatBlock({
 export function MigrationOverview() {
   const websites = useAppStore((s) => s.websites)
   const migrations = useAppStore((s) => s.migrations)
-  const baseline = useAppStore((s) => s.baseline)
   const m = useMemo(() => migrationMetrics(websites, migrations), [websites, migrations])
-
-  const delta = m.nextjs - baseline.nextjs
-  const trendingUp = delta >= 0
 
   return (
     <section aria-labelledby="migration-overview-heading">

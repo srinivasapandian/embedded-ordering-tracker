@@ -56,6 +56,15 @@ export function SortableHeader<TData, TValue>({
 /** Column show/hide menu driven by the table instance. */
 export function ColumnToggleMenu<TData>({ table }: { table: TanStackTable<TData> }) {
   const columns = table.getAllLeafColumns().filter((c) => c.getCanHide())
+  const allVisible = columns.every((c) => c.getIsVisible())
+  const someVisible = columns.some((c) => c.getIsVisible())
+  const isIndeterminate = someVisible && !allVisible
+
+  const handleToggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked
+    columns.forEach((c) => c.toggleVisibility(checked))
+  }
+
   return (
     <Popover
       align="end"
@@ -68,7 +77,19 @@ export function ColumnToggleMenu<TData>({ table }: { table: TanStackTable<TData>
       )}
     >
       <div className="p-1">
-        <p className="px-2 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wide text-faint">Toggle columns</p>
+        <p className="px-2 pb-1.5 pt-1.5 text-2xs font-semibold uppercase tracking-wide text-faint">Toggle columns</p>
+        
+        {columns.length > 0 && (
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border-b border-line px-2 pb-2 pt-1.5 text-sm font-semibold text-ink transition-colors hover:bg-elev">
+            <Checkbox
+              checked={allVisible}
+              indeterminate={isIndeterminate}
+              onChange={handleToggleAll}
+            />
+            <span>Apply All</span>
+          </label>
+        )}
+
         {columns.map((column) => (
           <label
             key={column.id}

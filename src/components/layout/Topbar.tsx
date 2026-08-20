@@ -20,7 +20,7 @@ export function Topbar() {
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/90 px-5 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card px-5">
       <Breadcrumbs />
 
       <div className="flex items-center gap-1.5">

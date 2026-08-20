@@ -44,7 +44,7 @@ export const rawClients: RawClient[] = [
       ['HBK Tampa', 'hbktampa.com', 'react', 'active'],
       ['HBK RoyersFord', 'hbkroyersford.com', 'nextjs', 'active'],
       ['HBK Atlanta', 'hbkjohnscreek.com', 'nextjs', 'active'],
-      ['HBK Lawrenceville', 'hbk-lawrenceville.maghil.com', 'nextjs', 'active'],
+      ['HBK Lawrenceville', 'hbk-lawrenceville.brisqueemb.com', 'nextjs', 'active'],
     ],
   },
   {
@@ -138,7 +138,7 @@ export const rawClients: RawClient[] = [
     assigned: 'tm03',
     sites: [
       ['Monks Allen', 'monksallen.com', 'react', 'active'],
-      ['Monks Irving', 'monks-irving.maghil.com', 'nextjs', 'active'],
+      ['Monks Irving', 'monks-irving.brisqueemb.com', 'nextjs', 'active'],
     ],
   },
   {
@@ -151,7 +151,7 @@ export const rawClients: RawClient[] = [
     assigned: 'tm08',
     sites: [
       ['Sri Krishna Vilas Frisco', 'srikrishnavilas.com', 'react', 'active'],
-      ['Krishna Vilas Cumming', 'krishna-vilas-cumming.maghil.com', 'react', 'active'],
+      ['Krishna Vilas Cumming', 'krishna-vilas-cumming.brisqueemb.com', 'react', 'active'],
     ],
   },
   {
@@ -365,7 +365,7 @@ export const rawClients: RawClient[] = [
     stage: 'qa',
     priority: 'high',
     assigned: 'tm03',
-    sites: [['Rotate Social', 'rotate-social-tx.maghil.com', 'nextjs', 'in-progress']],
+    sites: [['Rotate Social', 'rotate-social-tx.brisqueemb.com', 'nextjs', 'in-progress']],
   },
   {
     name: 'Birista House',
@@ -375,7 +375,7 @@ export const rawClients: RawClient[] = [
     stage: 'migration',
     priority: 'medium',
     assigned: 'tm08',
-    sites: [['Birista House', 'birista-house-frisco.maghil.com', 'nextjs', 'active']],
+    sites: [['Birista House', 'birista-house-frisco.brisqueemb.com', 'nextjs', 'active']],
   },
   {
     name: 'Sacred Spice',
@@ -385,7 +385,7 @@ export const rawClients: RawClient[] = [
     stage: 'ordering',
     priority: 'medium',
     assigned: 'tm03',
-    sites: [['Sacred Spice', 'sacred-spice-fl.maghil.com', 'nextjs', 'in-progress']],
+    sites: [['Sacred Spice', 'sacred-spice-fl.brisqueemb.com', 'nextjs', 'in-progress']],
   },
   {
     name: 'Bhimas Pure Veg',
@@ -502,7 +502,7 @@ export const rawClients: RawClient[] = [
     sites: [['Fabio Fitness', 'fabioparentefitness.com', 'nextjs', 'no-need']],
   },
   {
-    name: 'Maghil',
+    name: 'Brisque Emb',
     contact: 'Internal Team',
     location: 'Frisco, TX',
     status: 'active',
@@ -510,7 +510,7 @@ export const rawClients: RawClient[] = [
     priority: 'high',
     assigned: 'tm01',
     notes: 'Our own marketing site — dogfooding the migration pipeline.',
-    sites: [['Maghil Marketing Site', 'maghil.com', 'react', 'no-need']],
+    sites: [['Brisque Emb Marketing Site', 'brisqueemb.com', 'react', 'no-need']],
   },
 ]
 

@@ -20,7 +20,7 @@ export function Breadcrumbs() {
         className="focus-ring flex items-center gap-1 rounded text-sub transition-colors hover:text-ink"
       >
         <Home className="h-3.5 w-3.5" aria-hidden />
-        <span className="hidden font-medium sm:inline">Maghil Ops</span>
+        <span className="hidden font-medium sm:inline">Brisque Emb</span>
       </Link>
       {segments.map((seg, i) => {
         const label = ROUTE_LABELS[seg] ?? seg

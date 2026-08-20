@@ -16,7 +16,7 @@ import { useAppStore, type ClientFormValues } from '@/store/appStore'
 import { toast } from '@/store/toastStore'
 import { useSimulatedLoad } from '@/hooks/useSimulatedLoad'
 import { useDebounce } from '@/hooks/useDebounce'
-import { memberById, primaryWebsite } from '@/utils/selectors'
+import { primaryWebsite } from '@/utils/selectors'
 import { fmtDate } from '@/utils/date'
 import { Button } from '@/components/common/Button'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -32,7 +32,6 @@ import { SearchInput } from '@/components/common/SearchInput'
 import { Select } from '@/components/common/Select'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { StatusBadge } from '@/components/common/StatusBadge'
-import { UserAvatar } from '@/components/common/UserAvatar'
 import { ColumnToggleMenu, SortableHeader } from '@/components/common/table'
 import {
   AdminDataTable,
@@ -40,7 +39,6 @@ import {
   BulkBar,
   DisabledHint,
   RowActionButton,
-  memberOptions,
   selectionColumn,
   usePerms,
 } from './adminShared'
@@ -80,7 +78,6 @@ export function ClientsManager({ initialSearch = '' }: { initialSearch?: string 
   const query = useDebounce(search, 200)
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [priorityFilter, setPriorityFilter] = useState<string[]>([])
-  const [assignedFilter, setAssignedFilter] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [deleting, setDeleting] = useState<Client | null>(null)
@@ -91,14 +88,13 @@ export function ClientsManager({ initialSearch = '' }: { initialSearch?: string 
     return clients.filter((c) => {
       if (statusFilter.length > 0 && !statusFilter.includes(c.status)) return false
       if (priorityFilter.length > 0 && !priorityFilter.includes(c.priority)) return false
-      if (assignedFilter.length > 0 && !assignedFilter.includes(c.assignedToId ?? 'unassigned')) return false
       if (!q) return true
       const site = primaryWebsite(websites, c.id)
       return [c.name, c.contactName, c.email, c.location, site?.name, site?.domain].some((v) =>
         v?.toLowerCase().includes(q),
       )
     })
-  }, [clients, websites, query, statusFilter, priorityFilter, assignedFilter])
+  }, [clients, websites, query, statusFilter, priorityFilter])
 
   const columns = useMemo<ColumnDef<Client>[]>(
     () => [
@@ -169,26 +165,6 @@ export function ClientsManager({ initialSearch = '' }: { initialSearch?: string 
         ),
       },
       {
-        id: 'assigned',
-        meta: { label: 'Assigned' },
-        accessorFn: (c) => memberById(members, c.assignedToId)?.name ?? '',
-        header: ({ column }) => <SortableHeader column={column}>Assigned</SortableHeader>,
-        cell: ({ row }) => {
-          const member = memberById(members, row.original.assignedToId)
-          return (
-            <InlineSelectCell
-              value={row.original.assignedToId ?? ''}
-              options={memberOptions(members)}
-              ariaLabel={`Assignee for ${row.original.name}`}
-              display={<UserAvatar member={member ?? null} size="xs" showName />}
-              disabled={!canEdit}
-              disabledReason={denyReason}
-              onSave={(v) => updateClient(row.original.id, { assignedToId: v || null })}
-            />
-          )
-        },
-      },
-      {
         accessorKey: 'updatedAt',
         meta: { label: 'Updated' },
         header: ({ column }) => <SortableHeader column={column}>Updated</SortableHeader>,
@@ -233,12 +209,11 @@ export function ClientsManager({ initialSearch = '' }: { initialSearch?: string 
     initialSorting: [{ id: 'updatedAt', desc: true }],
   })
 
-  const hasFilters = search !== '' || statusFilter.length > 0 || priorityFilter.length > 0 || assignedFilter.length > 0
+  const hasFilters = search !== '' || statusFilter.length > 0 || priorityFilter.length > 0
   const clearFilters = () => {
     setSearch('')
     setStatusFilter([])
     setPriorityFilter([])
-    setAssignedFilter([])
   }
 
   const bulkStatusItems: MenuItem[] = STATUS_VALUES.map((v) => ({
@@ -309,12 +284,6 @@ export function ClientsManager({ initialSearch = '' }: { initialSearch?: string 
         />
         <FilterDropdown label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} />
         <FilterDropdown label="Priority" options={priorityOptions} selected={priorityFilter} onChange={setPriorityFilter} />
-        <FilterDropdown
-          label="Assigned"
-          options={[{ value: 'unassigned', label: 'Unassigned' }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
-          selected={assignedFilter}
-          onChange={setAssignedFilter}
-        />
         <div className="ml-auto flex items-center gap-2">
           <ColumnToggleMenu table={table} />
           <DisabledHint when={!canCreate} reason={denyReason}>
@@ -562,7 +531,6 @@ function ClientEditModal({ client, onClose }: { client: Client; onClose: () => v
 /* ------------------------------------------------------------------ */
 
 function ClientAddModal({ onClose }: { onClose: () => void }) {
-  const members = useAppStore((s) => s.teamMembers)
   const websites = useAppStore((s) => s.websites)
   const saveClientForm = useAppStore((s) => s.saveClientForm)
 
@@ -575,13 +543,9 @@ function ClientAddModal({ onClose }: { onClose: () => void }) {
         .regex(DOMAIN_RE, 'Enter a valid domain, e.g. restaurant.com')
         .refine((d) => !domains.has(d.toLowerCase()), 'This domain is already registered'),
       location: z.string().min(2, 'Location is required'),
-      email: z.string().email('Enter a valid email address'),
-      contactName: z.string().min(2, 'Contact name is required'),
-      phone: z.string(),
       orderingStatus: z.enum(ORDERING_VALUES),
       framework: z.enum(FRAMEWORK_VALUES),
       priority: z.enum(PRIORITY_VALUES),
-      assignedToId: z.string(),
       notes: z.string(),
     })
   }, [websites])
@@ -598,13 +562,9 @@ function ClientAddModal({ onClose }: { onClose: () => void }) {
       name: '',
       domain: '',
       location: '',
-      email: '',
-      contactName: '',
-      phone: '',
       orderingStatus: 'not-started',
       framework: 'react',
       priority: 'medium',
-      assignedToId: '',
       notes: '',
     },
   })
@@ -612,7 +572,8 @@ function ClientAddModal({ onClose }: { onClose: () => void }) {
   const onSubmit = handleSubmit((values) => {
     const payload: ClientFormValues = {
       ...values,
-      assignedToId: values.assignedToId || null,
+      email: '',
+      assignedToId: null,
     }
     saveClientForm(null, payload)
     toast.success('Client created', `${values.name} was added with ${values.domain}.`)
@@ -644,15 +605,6 @@ function ClientAddModal({ onClose }: { onClose: () => void }) {
         <FormField label="Website domain" htmlFor="ca-domain" required error={errors.domain?.message}>
           <Input id="ca-domain" placeholder="bellanapoli.com" invalid={!!errors.domain} {...register('domain')} />
         </FormField>
-        <FormField label="Contact name" htmlFor="ca-contact" required error={errors.contactName?.message}>
-          <Input id="ca-contact" invalid={!!errors.contactName} {...register('contactName')} />
-        </FormField>
-        <FormField label="Email" htmlFor="ca-email" required error={errors.email?.message}>
-          <Input id="ca-email" type="email" invalid={!!errors.email} {...register('email')} />
-        </FormField>
-        <FormField label="Phone" htmlFor="ca-phone" error={errors.phone?.message}>
-          <Input id="ca-phone" {...register('phone')} />
-        </FormField>
         <FormField label="Location" htmlFor="ca-location" required error={errors.location?.message}>
           <Input id="ca-location" placeholder="Austin, TX" invalid={!!errors.location} {...register('location')} />
         </FormField>
@@ -679,16 +631,6 @@ function ClientAddModal({ onClose }: { onClose: () => void }) {
             {PRIORITY_VALUES.map((v) => (
               <option key={v} value={v}>
                 {PRIORITY_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Assigned to" htmlFor="ca-assigned">
-          <Select id="ca-assigned" {...register('assignedToId')}>
-            <option value="">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
               </option>
             ))}
           </Select>

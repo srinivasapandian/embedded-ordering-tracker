@@ -13,7 +13,7 @@ const toneConfig: Record<MetricTone, { iconWrap: string; bar: 'emerald' | 'amber
   amber: { iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400', bar: 'amber' },
   slate: { iconWrap: 'bg-slate-200/70 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400', bar: 'slate' },
   red: { iconWrap: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400', bar: 'red' },
-  indigo: { iconWrap: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400', bar: 'primary' },
+  indigo: { iconWrap: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400', bar: 'primary' },
   sky: { iconWrap: 'bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400', bar: 'sky' },
   violet: { iconWrap: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400', bar: 'violet' },
 }

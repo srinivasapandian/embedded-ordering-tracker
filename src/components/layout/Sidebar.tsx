@@ -39,12 +39,12 @@ export function Sidebar() {
       {/* Logo */}
       <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-4', collapsed && 'justify-center px-0')}>
         <span className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white shadow-sm">
-          M
+          B
         </span>
         {!collapsed && (
           <span className="min-w-0 leading-tight">
-            <span className="block truncate text-sm font-bold tracking-tight text-ink">Maghil Ops</span>
-            <span className="block text-2xs font-medium text-faint">Admin Console</span>
+            <span className="block truncate text-sm font-bold tracking-tight text-ink">Brisque Emb</span>
+            <span className="block text-2xs font-medium text-faint">Dashboard</span>
           </span>
         )}
       </div>
