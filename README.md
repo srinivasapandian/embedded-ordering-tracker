@@ -1,16 +1,49 @@
-# React + Vite
+# Maghil Ops Console
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A frontend-only, desktop-first admin dashboard for managing website onboarding,
+client tracking, feature rollout, and React → Next.js migrations across the
+Maghil restaurant client portfolio.
 
-Currently, two official plugins are available:
+**100% frontend** — no backend, no APIs, no auth server. All data is realistic
+mock data managed in a centralized Zustand store and persisted to
+`localStorage`. Realtime activity is simulated on the client.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Modules
 
-## React Compiler
+- **Dashboard** — onboarding + migration overview metrics, donut chart, weekly
+  priority table with week navigation
+- **Client Tracker** — advanced TanStack table (search, filters, sorting,
+  column visibility, row expansion, bulk edit), onboarding-journey timeline
+  view, full client CRUD with Zod validation
+- **Features** — collapsible category groups, feature cards with animated
+  toggles, comparison view, full CRUD
+- **Migration** — drag-and-drop kanban (dnd-kit), details drawer with
+  migration logs, React vs Next.js comparison, batch actions
+- **Admin Panel** — unified data management with inline editing, users & roles
+  with a permission matrix, live audit trail, system settings
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the Oxlint configuration
+React 19 · Vite · TypeScript (strict) · Tailwind CSS · React Router ·
+Zustand (+persist) · TanStack Table · dnd-kit · Recharts · Framer Motion ·
+React Hook Form + Zod · Lucide icons · date-fns
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Getting started
+
+```bash
+npm install
+npm run dev        # http://localhost:5199
+```
+
+Other scripts: `npm run build`, `npm run typecheck`, `npm run lint`,
+`npm run preview`.
+
+## Notes
+
+- Theme (light/dark), sidebar state, and all data edits persist across
+  reloads via `localStorage`. Use **profile menu → Reset demo data** (or Admin
+  Panel → System Settings) to restore the seed dataset.
+- `Ctrl/Cmd + K` opens the global command palette (navigation, quick create,
+  entity search, theme toggle).
+- Architecture and module contracts are documented in
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
