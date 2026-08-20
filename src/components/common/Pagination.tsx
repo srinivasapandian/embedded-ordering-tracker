@@ -28,6 +28,18 @@ export function Pagination({
   const from = totalRows === 0 ? 0 : pageIndex * pageSize + 1
   const to = Math.min(totalRows, (pageIndex + 1) * pageSize)
 
+  const computedOptions = Array.from(
+    new Set(
+      pageSizeOptions
+        .filter((opt, i) => i === 0 || pageSizeOptions[i - 1] < totalRows)
+        .map((opt) => Math.min(opt, Math.max(totalRows, pageSizeOptions[0])))
+    )
+  )
+  if (!computedOptions.includes(pageSize)) {
+    computedOptions.push(pageSize)
+  }
+  computedOptions.sort((a, b) => a - b)
+
   return (
     <nav aria-label="Pagination" className={cn('flex flex-wrap items-center justify-between gap-3 px-1', className)}>
       <p className="text-xs text-sub">
@@ -44,7 +56,7 @@ export function Pagination({
               className="w-[74px]"
               aria-label="Rows per page"
             >
-              {pageSizeOptions.map((s) => (
+              {computedOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
