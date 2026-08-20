@@ -44,11 +44,11 @@ export function AppLayout() {
   useMockRealtime()
 
   return (
-    <div className="flex h-full overflow-hidden bg-canvas">
+    <div className="flex min-h-screen bg-canvas">
       <Sidebar />
-      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto">
+        <main id="main" className="min-w-0 flex-1">
           <ErrorBoundary>
             <Suspense fallback={<PageFallback />}>
               <motion.div

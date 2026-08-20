@@ -34,7 +34,7 @@ export function Sidebar() {
     <motion.aside
       animate={{ width: collapsed ? 68 : 240 }}
       transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-      className="sticky top-0 z-40 flex h-full shrink-0 flex-col border-r border-line bg-card"
+      className="sticky top-0 z-40 flex h-screen shrink-0 flex-col border-r border-line bg-card"
     >
       {/* Logo */}
       <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-4', collapsed && 'justify-center px-0')}>
