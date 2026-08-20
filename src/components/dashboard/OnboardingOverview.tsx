@@ -50,7 +50,7 @@ export function OnboardingOverview() {
       icon: Earth,
       tone: 'indigo',
       caption: 'Across all clients',
-      trend: { delta: m.total - baseline.totalWebsites, label: 'vs last week' },
+      // trend: { delta: m.total - baseline.totalWebsites, label: 'vs last week' },
     },
     {
       title: 'Online Ordering Active',
@@ -60,7 +60,7 @@ export function OnboardingOverview() {
       caption: 'Websites active',
       percent: pct(m.active, m.total),
       progress: pctNumber(m.active, m.total),
-      trend: { delta: m.active - baseline.orderingActive, label: 'vs last week' },
+      // trend: { delta: m.active - baseline.orderingActive, label: 'vs last week' },
     },
     {
       title: 'Ordering In Progress',
