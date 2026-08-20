@@ -6,7 +6,7 @@ import {
   Boxes,
   CornerDownLeft,
   GitBranch,
-  Globe,
+  Earth,
   LayoutDashboard,
   Moon,
   Plus,
@@ -121,7 +121,7 @@ export function CommandPalette() {
         group: 'Websites',
         label: w.name,
         sublabel: w.domain,
-        icon: Globe,
+        icon: Earth,
         perform: () => go(`/admin?tab=websites&q=${encodeURIComponent(w.name)}`),
       }))
 

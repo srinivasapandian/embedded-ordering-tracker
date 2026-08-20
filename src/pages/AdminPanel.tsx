@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe, Users } from 'lucide-react'
+import { Earth, Users } from 'lucide-react'
 import { ClientsManager } from '@/components/admin/ClientsManager'
 import { WebsitesManager } from '@/components/admin/WebsitesManager'
 import { Tabs } from '@/components/common/Tabs'
@@ -20,7 +20,7 @@ export default function AdminPanel() {
         layoutId="admin-panel-tabs"
         items={[
           { key: 'clients', label: 'Clients', icon: Users, count: clients.length },
-          { key: 'websites', label: 'Websites', icon: Globe, count: websites.length },
+          { key: 'websites', label: 'Websites', icon: Earth, count: websites.length },
         ]}
       />
       <div className="mt-4">

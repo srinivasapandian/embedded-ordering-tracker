@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { CircleAlert, CircleMinus, Clock, Globe, ShoppingCart } from 'lucide-react'
+import { CircleAlert, CircleMinus, Clock, Earth, ShoppingCart } from 'lucide-react'
 import { MetricCard, type MetricTone } from '@/components/common/MetricCard'
 import { useAppStore } from '@/store/appStore'
 import { pct, pctNumber } from '@/utils/format'
@@ -47,7 +47,7 @@ export function OnboardingOverview() {
     {
       title: 'Total Websites',
       value: m.total,
-      icon: Globe,
+      icon: Earth,
       tone: 'indigo',
       caption: 'Across all clients',
       trend: { delta: m.total - baseline.totalWebsites, label: 'vs last week' },

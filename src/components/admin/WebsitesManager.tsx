@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { ColumnDef } from '@tanstack/react-table'
-import { ChevronDown, Globe, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Earth, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Framework, OrderingStatus, Website } from '@/types'
 import { FRAMEWORK_LABELS, ORDERING_STATUS_LABELS } from '@/types'
 import { useAppStore } from '@/store/appStore'
@@ -297,7 +297,7 @@ export function WebsitesManager({ initialSearch = '' }: { initialSearch?: string
         table={table}
         empty={
           <EmptyState
-            icon={Globe}
+            icon={Earth}
             title={hasFilters ? 'No websites match your filters' : 'No websites yet'}
             description={
               hasFilters
