@@ -105,7 +105,7 @@ export function MigrationOverview() {
             <div>
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium text-sub">Migration completion</span>
-                <span
+                {/* <span
                   className={cn(
                     'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold',
                     trendingUp
@@ -120,7 +120,7 @@ export function MigrationOverview() {
                   )}
                   {trendingUp ? '+' : ''}
                   {delta} vs last week
-                </span>
+                </span> */}
               </div>
               <ProgressBar
                 value={m.completionPct}
