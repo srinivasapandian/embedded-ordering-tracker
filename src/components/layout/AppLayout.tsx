@@ -44,7 +44,7 @@ export function AppLayout() {
   useMockRealtime()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-canvas">
+    <div className="flex h-full overflow-hidden bg-canvas">
       <Sidebar />
       <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar />

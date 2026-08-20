@@ -28,7 +28,6 @@ export function Pagination({
   const from = totalRows === 0 ? 0 : pageIndex * pageSize + 1
   const to = Math.min(totalRows, (pageIndex + 1) * pageSize)
 
-<<<<<<< Updated upstream
   const computedOptions = Array.from(
     new Set(
       pageSizeOptions
@@ -40,9 +39,6 @@ export function Pagination({
     computedOptions.push(pageSize)
   }
   computedOptions.sort((a, b) => a - b)
-
-=======
->>>>>>> Stashed changes
   return (
     <nav aria-label="Pagination" className={cn('flex flex-wrap items-center justify-between gap-3 px-1', className)}>
       <p className="text-xs text-sub">

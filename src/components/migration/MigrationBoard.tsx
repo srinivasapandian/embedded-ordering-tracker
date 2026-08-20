@@ -218,7 +218,7 @@ function BoardColumn({
         <div
           ref={setNodeRef}
           className={cn(
-            'flex max-h-[calc(100vh-425px)] min-h-[320px] flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors duration-150',
+            'flex min-h-[320px] flex-1 flex-col gap-2 overflow-y-auto p-2 transition-colors duration-150',
             isOver && 'bg-primary-500/[0.06]',
           )}
         >
