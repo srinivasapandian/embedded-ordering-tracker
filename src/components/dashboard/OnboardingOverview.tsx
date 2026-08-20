@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { CircleAlert, CircleMinus, Clock, Earth, ShoppingCart } from 'lucide-react'
+import { CircleAlert, CircleMinus, ClipboardList, Earth, ShoppingCart } from 'lucide-react'
 import { MetricCard, type MetricTone } from '@/components/common/MetricCard'
 import { useAppStore } from '@/store/appStore'
 import { pct, pctNumber } from '@/utils/format'
@@ -65,7 +65,7 @@ export function OnboardingOverview() {
     {
       title: 'Ordering In Progress',
       value: m.inProgress,
-      icon: Clock,
+      icon: ClipboardList,
       tone: 'amber',
       caption: 'Setup underway',
       percent: pct(m.inProgress, m.total),
