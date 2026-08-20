@@ -309,7 +309,7 @@ export function WeeklyPriorityTable() {
         {/* Header: title + week navigation */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="min-w-0">
-            <h2 id="weekly-priority-heading" className="text-sm font-semibold text-ink">
+            <h2 id="weekly-priority-heading" className="section-heading">
               Weekly Priority
             </h2>
             <p className="mt-0.5 text-xs text-sub">

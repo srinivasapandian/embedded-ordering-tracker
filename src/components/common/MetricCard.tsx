@@ -67,8 +67,8 @@ export function MetricCard({
       transition={{ duration: 0.3, delay: index * 0.05, ease: 'easeOut' }}
       onClick={onClick}
       className={cn(
-        'app-card group relative overflow-hidden p-4 transition-shadow',
-        onClick && 'focus-ring cursor-pointer hover:shadow-pop',
+        'app-card group relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-pop hover:border-primary-500/30',
+        onClick && 'focus-ring cursor-pointer',
         highlight && 'ring-2 ring-primary-400/60',
         className,
       )}

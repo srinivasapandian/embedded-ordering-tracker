@@ -54,7 +54,7 @@ export function CategorySection({
           >
             <ChevronDown className="h-4 w-4 text-faint" aria-hidden />
           </motion.span>
-          <span className="text-sm font-semibold text-ink">{FEATURE_CATEGORY_LABELS[category]}</span>
+          <span className="section-heading">{FEATURE_CATEGORY_LABELS[category]}</span>
           <Badge tone="slate">{features.length}</Badge>
           <span className="text-2xs text-faint">
             {enabledCount} of {features.length} enabled

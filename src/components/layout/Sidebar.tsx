@@ -58,11 +58,11 @@ export function Sidebar() {
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'focus-ring group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium transition-colors',
-                  collapsed && 'justify-center px-0',
+                  'focus-ring group flex h-9 items-center gap-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                  collapsed && 'justify-center',
                   isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
-                    : 'text-sub hover:bg-elev hover:text-ink',
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300 border-l-2 border-primary-500 rounded-l-none pl-2'
+                    : 'text-sub hover:bg-elev hover:text-ink border-l-2 border-transparent pl-2',
                 )
               }
             >

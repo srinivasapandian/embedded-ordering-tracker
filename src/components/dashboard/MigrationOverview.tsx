@@ -47,7 +47,7 @@ export function MigrationOverview() {
 
   return (
     <section aria-labelledby="migration-overview-heading">
-      <h2 id="migration-overview-heading" className="mb-2.5 text-sm font-semibold text-ink">
+      <h2 id="migration-overview-heading" className="section-heading mb-2.5">
         Migration Status Overview
       </h2>
       <motion.div

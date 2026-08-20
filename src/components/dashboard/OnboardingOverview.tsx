@@ -91,7 +91,7 @@ export function OnboardingOverview() {
 
   return (
     <section aria-labelledby="onboarding-overview-heading">
-      <h2 id="onboarding-overview-heading" className="mb-2.5 text-sm font-semibold text-ink">
+      <h2 id="onboarding-overview-heading" className="section-heading mb-2.5">
         Client Onboarding Overview
       </h2>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">

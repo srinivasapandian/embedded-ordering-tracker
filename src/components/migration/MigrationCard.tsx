@@ -176,10 +176,10 @@ export function SortableMigrationCard({
       }
       aria-label={`${website?.name ?? 'Website'} migration card`}
       className={cn(
-        'group app-card select-none p-3 outline-none transition-shadow focus-ring',
-        batchMode ? 'cursor-pointer' : 'cursor-grab hover:shadow-pop active:cursor-grabbing',
+        'group app-card select-none p-3 outline-none transition-all duration-200 focus-ring',
+        batchMode ? 'cursor-pointer' : 'cursor-grab hover:shadow-pop hover:-translate-y-0.5 hover:border-primary-500/30 active:cursor-grabbing',
         selected && 'border-primary-400/70 ring-1 ring-primary-400/60',
-        isDragging && 'opacity-40',
+        isDragging && 'opacity-40 rotate-1 shadow-lg',
         flash && 'ring-2 ring-primary-400',
       )}
     >

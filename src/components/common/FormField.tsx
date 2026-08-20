@@ -24,7 +24,7 @@ export function FormField({ label, htmlFor, required, error, hint, className, ch
       </label>
       {children}
       {error ? (
-        <p id={`${htmlFor}-error`} role="alert" className="text-xs text-red-500">
+        <p id={`${htmlFor}-error`} role="alert" className="animate-shake text-xs text-red-500">
           {error}
         </p>
       ) : hint ? (
