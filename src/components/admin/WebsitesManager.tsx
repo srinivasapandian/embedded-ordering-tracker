@@ -4,14 +4,22 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { ColumnDef } from '@tanstack/react-table'
 import { ChevronDown, Globe, Pencil, Plus, Trash2 } from 'lucide-react'
-import type { Framework, OrderingStatus, Website } from '@/types'
-import { FRAMEWORK_LABELS, ORDERING_STATUS_LABELS } from '@/types'
+import type { Environment, Framework, OrderingStatus, QaSignoff, Website } from '@/types'
+import {
+  ENVIRONMENT_LABELS,
+  ENVIRONMENTS_ORDERED,
+  FRAMEWORK_LABELS,
+  ORDERING_STATUS_LABELS,
+  QA_SIGNOFF_LABELS,
+  QA_SIGNOFF_ORDERED,
+} from '@/types'
 import { useAppStore } from '@/store/appStore'
 import { toast } from '@/store/toastStore'
 import { useSimulatedLoad } from '@/hooks/useSimulatedLoad'
 import { useDebounce } from '@/hooks/useDebounce'
 import { clientById } from '@/utils/selectors'
 import { fmtDate } from '@/utils/date'
+import { Badge } from '@/components/common/Badge'
 import { Button } from '@/components/common/Button'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { DropdownMenu, type MenuItem } from '@/components/common/DropdownMenu'
@@ -44,8 +52,13 @@ const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])
 
 const frameworkOptions = FRAMEWORK_VALUES.map((v) => ({ value: v, label: FRAMEWORK_LABELS[v] }))
 const orderingOptions = ORDERING_VALUES.map((v) => ({ value: v, label: ORDERING_STATUS_LABELS[v] }))
+const environmentOptions = ENVIRONMENTS_ORDERED.map((v) => ({ value: v, label: ENVIRONMENT_LABELS[v] }))
+const qaSignoffOptions = QA_SIGNOFF_ORDERED.map((v) => ({ value: v, label: QA_SIGNOFF_LABELS[v] }))
 
 /** Default human ordering-stage label for a given ordering status. */
+const ENV_TONE = { Production: 'emerald', Staging: 'amber', QA: 'sky' } as const
+const QA_TONE = { 'signed-off': 'emerald', pending: 'amber', 'not-required': 'slate' } as const
+
 function stageForStatus(status: OrderingStatus): string {
   switch (status) {
     case 'active':
@@ -148,6 +161,38 @@ export function WebsitesManager({ initialSearch = '' }: { initialSearch?: string
         ),
       },
       {
+        accessorKey: 'environment',
+        meta: { label: 'Environment' },
+        header: ({ column }) => <SortableHeader column={column}>Environment</SortableHeader>,
+        cell: ({ row }) => (
+          <InlineSelectCell
+            value={row.original.environment}
+            options={environmentOptions}
+            ariaLabel={`Environment for ${row.original.name}`}
+            display={<Badge tone={ENV_TONE[row.original.environment]}>{ENVIRONMENT_LABELS[row.original.environment]}</Badge>}
+            disabled={!canEdit}
+            disabledReason={denyReason}
+            onSave={(v) => updateWebsite(row.original.id, { environment: v as Environment })}
+          />
+        ),
+      },
+      {
+        accessorKey: 'qaSignoff',
+        meta: { label: 'QA Sign-off' },
+        header: ({ column }) => <SortableHeader column={column}>QA Sign-off</SortableHeader>,
+        cell: ({ row }) => (
+          <InlineSelectCell
+            value={row.original.qaSignoff}
+            options={qaSignoffOptions}
+            ariaLabel={`QA sign-off for ${row.original.name}`}
+            display={<Badge tone={QA_TONE[row.original.qaSignoff]}>{QA_SIGNOFF_LABELS[row.original.qaSignoff]}</Badge>}
+            disabled={!canEdit}
+            disabledReason={denyReason}
+            onSave={(v) => updateWebsite(row.original.id, { qaSignoff: v as QaSignoff })}
+          />
+        ),
+      },
+      {
         accessorKey: 'updatedAt',
         meta: { label: 'Updated' },
         header: ({ column }) => <SortableHeader column={column}>Updated</SortableHeader>,
@@ -221,7 +266,7 @@ export function WebsitesManager({ initialSearch = '' }: { initialSearch?: string
   if (load.loading) {
     return (
       <div className="app-card overflow-hidden">
-        <SkeletonTable rows={8} cols={7} />
+        <SkeletonTable rows={8} cols={9} />
       </div>
     )
   }
@@ -385,20 +430,27 @@ function WebsiteAddModal({ onClose }: { onClose: () => void }) {
 
   const sortedClients = useMemo(() => [...clients].sort((a, b) => a.name.localeCompare(b.name)), [clients])
 
-  const onSubmit = handleSubmit((values) => {
+  const onSubmit = handleSubmit(async (values) => {
     const now = new Date().toISOString()
-    addWebsite({
-      name: values.name,
-      domain: values.domain,
-      clientId: values.clientId,
-      framework: values.framework,
-      orderingStatus: values.orderingStatus,
-      orderingStage: stageForStatus(values.orderingStatus),
-      orderingStartDate: values.orderingStatus === 'active' || values.orderingStatus === 'in-progress' ? now : null,
-      orderingCompletedDate: values.orderingStatus === 'active' ? now : null,
-    })
-    toast.success('Website created', `${values.name} (${values.domain}) was added.`)
-    onClose()
+    try {
+      await addWebsite({
+        name: values.name,
+        domain: values.domain,
+        clientId: values.clientId,
+        framework: values.framework,
+        orderingStatus: values.orderingStatus,
+        orderingStage: stageForStatus(values.orderingStatus),
+        orderingStartDate: values.orderingStatus === 'active' || values.orderingStatus === 'in-progress' ? now : null,
+        orderingCompletedDate: values.orderingStatus === 'active' ? now : null,
+        environment: 'Staging',
+        qaSignoff: 'pending',
+        liveUrl: `https://${values.domain}`,
+      })
+      toast.success('Website created', `${values.name} (${values.domain}) was added.`)
+      onClose()
+    } catch {
+      // withErrorToast in the store already surfaced the failure — keep the modal open so the user can retry.
+    }
   })
 
   return (
@@ -482,6 +534,9 @@ function WebsiteEditModal({ website, onClose }: { website: Website; onClose: () 
       framework: z.enum(FRAMEWORK_VALUES),
       orderingStatus: z.enum(ORDERING_VALUES),
       orderingStage: z.string().min(2, 'Stage label is required'),
+      environment: z.enum(['Production', 'Staging', 'QA']),
+      qaSignoff: z.enum(['signed-off', 'pending', 'not-required']),
+      liveUrl: z.string().min(2, 'Live URL is required'),
     })
   }, [websites, website.id])
 
@@ -500,15 +555,22 @@ function WebsiteEditModal({ website, onClose }: { website: Website; onClose: () 
       framework: website.framework,
       orderingStatus: website.orderingStatus,
       orderingStage: website.orderingStage,
+      environment: website.environment,
+      qaSignoff: website.qaSignoff,
+      liveUrl: website.liveUrl,
     },
   })
 
   const sortedClients = useMemo(() => [...clients].sort((a, b) => a.name.localeCompare(b.name)), [clients])
 
-  const onSubmit = handleSubmit((values) => {
-    updateWebsite(website.id, values)
-    toast.success('Website updated', `${values.name} was saved.`)
-    onClose()
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      await updateWebsite(website.id, values)
+      toast.success('Website updated', `${values.name} was saved.`)
+      onClose()
+    } catch {
+      // withErrorToast in the store already surfaced the failure — keep the modal open so the user can retry.
+    }
   })
 
   return (
@@ -571,6 +633,27 @@ function WebsiteEditModal({ website, onClose }: { website: Website; onClose: () 
         </FormField>
         <FormField label="Ordering stage" htmlFor="we-stage" required error={errors.orderingStage?.message} className="col-span-2">
           <Input id="we-stage" placeholder="Menu setup, Payments QA…" invalid={!!errors.orderingStage} {...register('orderingStage')} />
+        </FormField>
+        <FormField label="Environment" htmlFor="we-environment">
+          <Select id="we-environment" {...register('environment')}>
+            {ENVIRONMENTS_ORDERED.map((v) => (
+              <option key={v} value={v}>
+                {ENVIRONMENT_LABELS[v]}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="QA sign-off" htmlFor="we-qa">
+          <Select id="we-qa" {...register('qaSignoff')}>
+            {QA_SIGNOFF_ORDERED.map((v) => (
+              <option key={v} value={v}>
+                {QA_SIGNOFF_LABELS[v]}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="Live URL" htmlFor="we-live-url" required error={errors.liveUrl?.message} className="col-span-2">
+          <Input id="we-live-url" invalid={!!errors.liveUrl} {...register('liveUrl')} />
         </FormField>
         <button type="submit" className="hidden" aria-hidden />
       </form>

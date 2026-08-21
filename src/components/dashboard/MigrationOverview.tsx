@@ -1,24 +1,16 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingDown, TrendingUp } from 'lucide-react'
 import { AnimatedNumber } from '@/components/common/AnimatedNumber'
 import { DonutChart } from '@/components/common/DonutChart'
+import { FrameworkMigrationLabel, MigrationPipeline } from '@/components/common/MigrationPipeline'
 import { ProgressBar } from '@/components/common/ProgressBar'
+import { SectionHeader } from '@/components/common/SectionHeader'
 import { useAppStore } from '@/store/appStore'
-import { MIGRATION_STAGES_ORDERED, MIGRATION_STAGE_LABELS, type MigrationStage } from '@/types'
 import { cn } from '@/utils/cn'
 import { migrationMetrics } from '@/utils/selectors'
 
-const NEXTJS_COLOR = '#6366f1'
-const REACT_COLOR = '#38bdf8'
-
-/** Dot colors matching the shared StatusBadge tones for migration stages. */
-const STAGE_DOTS: Record<MigrationStage, string> = {
-  planning: 'bg-sky-500',
-  'in-progress': 'bg-amber-500',
-  testing: 'bg-amber-500',
-  completed: 'bg-emerald-500',
-}
+const NEXTJS_COLOR = '#dc2626' // brand red — the target/migrated state
+const REACT_COLOR = '#94a3b8' // neutral slate — legacy/remaining
 
 function StatBlock({
   label,
@@ -44,17 +36,11 @@ function StatBlock({
 export function MigrationOverview() {
   const websites = useAppStore((s) => s.websites)
   const migrations = useAppStore((s) => s.migrations)
-  const baseline = useAppStore((s) => s.baseline)
   const m = useMemo(() => migrationMetrics(websites, migrations), [websites, migrations])
 
-  const delta = m.nextjs - baseline.nextjs
-  const trendingUp = delta >= 0
-
   return (
-    <section aria-labelledby="migration-overview-heading">
-      <h2 id="migration-overview-heading" className="mb-2.5 text-sm font-semibold text-ink">
-        Migration Status Overview
-      </h2>
+    <section aria-label="React to Next.js migration overview">
+      <SectionHeader title="React → Next.js Migration" description={`${m.nextjs} migrated · ${m.react} remaining`} />
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -99,28 +85,12 @@ export function MigrationOverview() {
               <StatBlock
                 label="Still Running on React"
                 value={m.react}
-                valueClassName="text-sky-600 dark:text-sky-400"
+                valueClassName="text-slate-500 dark:text-slate-400"
               />
             </div>
             <div>
               <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-medium text-sub">Migration completion</span>
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold',
-                    trendingUp
-                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                      : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
-                  )}
-                >
-                  {trendingUp ? (
-                    <TrendingUp className="h-3 w-3" aria-hidden />
-                  ) : (
-                    <TrendingDown className="h-3 w-3" aria-hidden />
-                  )}
-                  {trendingUp ? '+' : ''}
-                  {delta} vs last week
-                </span>
               </div>
               <ProgressBar
                 value={m.completionPct}
@@ -130,24 +100,19 @@ export function MigrationOverview() {
                 aria-label="Websites migrated to Next.js"
               />
             </div>
+            <FrameworkMigrationLabel />
           </div>
         </div>
 
-        {/* Per-stage strip — derives live from the migrations board */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3">
-          {MIGRATION_STAGES_ORDERED.map((stage) => (
-            <span key={stage} className="flex items-center gap-2">
-              <span className={cn('h-2 w-2 shrink-0 rounded-full', STAGE_DOTS[stage])} aria-hidden />
-              <span className="text-xs text-sub">{MIGRATION_STAGE_LABELS[stage]}</span>
-              <AnimatedNumber
-                value={m.byStage[stage]}
-                className="text-sm font-semibold tabular-nums text-ink"
-              />
+        {/* Migration stage pipeline — derives live from the migrations board */}
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-sub">Migration stages</span>
+            <span className="text-2xs text-faint">
+              {m.totalMigrations} migration{m.totalMigrations === 1 ? '' : 's'} tracked
             </span>
-          ))}
-          <span className="ml-auto text-2xs text-faint">
-            {m.totalMigrations} migration{m.totalMigrations === 1 ? '' : 's'} tracked
-          </span>
+          </div>
+          <MigrationPipeline byStage={m.byStage} />
         </div>
       </motion.div>
     </section>

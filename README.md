@@ -1,8 +1,8 @@
-# Maghil Ops Console
+# Brisque Ops Console
 
 A frontend-only, desktop-first admin dashboard for managing website onboarding,
 client tracking, feature rollout, and React → Next.js migrations across the
-Maghil restaurant client portfolio.
+Brisque restaurant client portfolio.
 
 **100% frontend** — no backend, no APIs, no auth server. All data is realistic
 mock data managed in a centralized Zustand store and persisted to

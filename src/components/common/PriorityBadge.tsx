@@ -10,9 +10,13 @@ const CONFIG: Record<Priority, { label: string; tone: BadgeTone; Icon: typeof Ar
 }
 
 export function PriorityBadge({ priority, className }: { priority: Priority; className?: string }) {
-  const { label, tone, Icon } = CONFIG[priority]
+  // Firestore data isn't type-checked at runtime — a doc missing/with a bad
+  // `priority` value should show a neutral badge instead of crashing the page.
+  const { label, tone, Icon } = CONFIG[priority] ?? { label: priority ?? '—', tone: 'slate' as const, Icon: Minus }
   return (
-    <Badge tone={tone} uppercase className={cn('gap-1', className)}>
+    // Fixed width so High/Medium/Low badges line up cleanly in a column
+    // instead of each sizing to its own label length.
+    <Badge tone={tone} uppercase className={cn('w-[92px] justify-center gap-1', className)}>
       <Icon className="h-3 w-3" aria-hidden />
       {label}
     </Badge>

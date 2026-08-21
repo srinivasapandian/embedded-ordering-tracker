@@ -6,7 +6,7 @@ import { Popover } from '@/components/common/Popover'
 import { EmptyState } from '@/components/common/EmptyState'
 
 const kindDot: Record<string, string> = {
-  info: 'bg-sky-500',
+  info: 'bg-slate-400',
   success: 'bg-emerald-500',
   warning: 'bg-amber-500',
 }

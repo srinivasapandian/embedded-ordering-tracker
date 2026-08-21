@@ -5,6 +5,7 @@ import type { Migration, MigrationLog, MigrationStage, Priority } from '@/types'
 import { MIGRATION_STAGES_ORDERED, MIGRATION_STAGE_LABELS, PRIORITY_LABELS } from '@/types'
 import { useAppStore } from '@/store/appStore'
 import { toast } from '@/store/toastStore'
+import { useMigrationLogs } from '@/hooks/useMigrationLogs'
 import { cn } from '@/utils/cn'
 import { fmtDate, fmtTime, relativeDay, timeAgo } from '@/utils/date'
 import { AnimatedNumber } from '@/components/common/AnimatedNumber'
@@ -20,15 +21,15 @@ import { Select } from '@/components/common/Select'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { STAGE_META } from './stageMeta'
 
-const EMPTY_LOGS: MigrationLog[] = []
-
 interface MigrationDrawerProps {
   migrationId: string | null
   onClose: () => void
+  /** View-only mode for the standalone Migration page — editing only happens from the Admin Panel. */
+  readOnly?: boolean
 }
 
 /** Right-side drawer with inline editing, progress and the migration log feed. */
-export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) {
+export function MigrationDrawer({ migrationId, onClose, readOnly = false }: MigrationDrawerProps) {
   const live = useAppStore((s) =>
     migrationId ? s.migrations.find((m) => m.id === migrationId) : undefined,
   )
@@ -48,6 +49,7 @@ export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) 
 
   const website = migration ? websites.find((w) => w.id === migration.websiteId) : undefined
   const client = website ? clients.find((c) => c.id === website.clientId) : undefined
+  const logs = useMigrationLogs(migration?.id)
 
   /* ------------------------- progress slider ------------------------- */
   const [sliderValue, setSliderValue] = useState(0)
@@ -84,17 +86,16 @@ export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) 
   }, [migrationId])
 
   const logGroups = useMemo(() => {
-    const logs = migration?.logs ?? EMPTY_LOGS
-    const sorted = [...logs].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    // logs already arrive newest-first from the subcollection subscription.
     const groups: Array<{ day: string; entries: MigrationLog[] }> = []
-    for (const log of sorted) {
+    for (const log of logs) {
       const day = relativeDay(log.timestamp)
       const last = groups[groups.length - 1]
       if (last && last.day === day) last.entries.push(log)
       else groups.push({ day, entries: [log] })
     }
     return groups
-  }, [migration?.logs])
+  }, [logs])
 
   const toggleLog = (id: string) => {
     setExpandedLogs((prev) => {
@@ -172,10 +173,14 @@ export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) 
         }
         footer={
           <div className="flex w-full items-center justify-between">
-            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-              Delete migration
-            </Button>
+            {readOnly ? (
+              <span className="text-2xs text-faint">Manage this migration from the Admin Panel.</span>
+            ) : (
+              <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                Delete migration
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={onClose}>
               Close
             </Button>
@@ -189,84 +194,102 @@ export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) 
             <ReadOnlyField label="Website" value={website?.name ?? 'Unknown website'} sub={website?.domain} />
             <ReadOnlyField label="Client" value={client?.name ?? 'Unknown client'} sub={client?.location} />
 
-            <FormField label="Developer" htmlFor="mig-developer">
-              <Select
-                id="mig-developer"
-                value={migration.developerId ?? ''}
-                onChange={(e) => handleDeveloper(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+            {readOnly ? (
+              <>
+                <ReadOnlyField
+                  label="Developer"
+                  value={teamMembers.find((m) => m.id === migration.developerId)?.name ?? 'Unassigned'}
+                />
+                <ReadOnlyField label="Priority" value={PRIORITY_LABELS[migration.priority]} />
+                <ReadOnlyField label="Stage" value={MIGRATION_STAGE_LABELS[migration.stage]} />
+                <ReadOnlyField label="Due date" value={fmtDate(migration.dueDate)} />
+              </>
+            ) : (
+              <>
+                <FormField label="Developer" htmlFor="mig-developer">
+                  <Select
+                    id="mig-developer"
+                    value={migration.developerId ?? ''}
+                    onChange={(e) => handleDeveloper(e.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {teamMembers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
 
-            <FormField label="Priority" htmlFor="mig-priority">
-              <Select
-                id="mig-priority"
-                value={migration.priority}
-                onChange={(e) => handlePriority(e.target.value as Priority)}
-              >
-                {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
-                  <option key={p} value={p}>
-                    {PRIORITY_LABELS[p]}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+                <FormField label="Priority" htmlFor="mig-priority">
+                  <Select
+                    id="mig-priority"
+                    value={migration.priority}
+                    onChange={(e) => handlePriority(e.target.value as Priority)}
+                  >
+                    {(Object.keys(PRIORITY_LABELS) as Priority[]).map((p) => (
+                      <option key={p} value={p}>
+                        {PRIORITY_LABELS[p]}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
 
-            <FormField label="Stage" htmlFor="mig-stage">
-              <Select
-                id="mig-stage"
-                value={migration.stage}
-                onChange={(e) => handleStage(e.target.value as MigrationStage)}
-              >
-                {MIGRATION_STAGES_ORDERED.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {MIGRATION_STAGE_LABELS[stage]}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+                <FormField label="Stage" htmlFor="mig-stage">
+                  <Select
+                    id="mig-stage"
+                    value={migration.stage}
+                    onChange={(e) => handleStage(e.target.value as MigrationStage)}
+                  >
+                    {MIGRATION_STAGES_ORDERED.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {MIGRATION_STAGE_LABELS[stage]}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
 
-            <FormField label="Due date" htmlFor="mig-due">
-              <Input
-                id="mig-due"
-                type="date"
-                value={migration.dueDate}
-                onChange={(e) => handleDueDate(e.target.value)}
-              />
-            </FormField>
+                <FormField label="Due date" htmlFor="mig-due">
+                  <Input
+                    id="mig-due"
+                    type="date"
+                    value={migration.dueDate}
+                    onChange={(e) => handleDueDate(e.target.value)}
+                  />
+                </FormField>
+              </>
+            )}
 
             <div className="col-span-2 space-y-1.5">
               <label htmlFor="mig-progress" className="block text-xs font-medium text-sub">
                 Progress
               </label>
-              <div className="flex items-center gap-3">
-                <input
-                  id="mig-progress"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={sliderValue}
-                  onChange={(e) => {
-                    slidingRef.current = true
-                    setSliderValue(Number(e.target.value))
-                  }}
-                  onPointerUp={commitProgress}
-                  onKeyUp={commitProgress}
-                  onBlur={commitProgress}
-                  aria-valuetext={`${sliderValue}%`}
-                  className="focus-ring w-full cursor-pointer accent-primary-600"
-                />
-                <span className="w-11 shrink-0 text-right text-sm font-semibold tabular-nums text-ink">
-                  {sliderValue}%
-                </span>
-              </div>
+              {readOnly ? (
+                <ProgressBar value={migration.progress} tone={meta.bar} size="md" showLabel aria-label="Migration progress" />
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    id="mig-progress"
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={sliderValue}
+                    onChange={(e) => {
+                      slidingRef.current = true
+                      setSliderValue(Number(e.target.value))
+                    }}
+                    onPointerUp={commitProgress}
+                    onKeyUp={commitProgress}
+                    onBlur={commitProgress}
+                    aria-valuetext={`${sliderValue}%`}
+                    className="focus-ring w-full cursor-pointer accent-primary-600"
+                  />
+                  <span className="w-11 shrink-0 text-right text-sm font-semibold tabular-nums text-ink">
+                    {sliderValue}%
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -300,34 +323,36 @@ export function MigrationDrawer({ migrationId, onClose }: MigrationDrawerProps) 
           <div className="flex items-center gap-2">
             <h3 className="text-2xs font-semibold uppercase tracking-wider text-faint">Migration Logs</h3>
             <Badge tone="slate" className="tabular-nums">
-              {migration.logs.length}
+              {logs.length}
             </Badge>
           </div>
 
-          <form
-            onSubmit={handleAddLog}
-            aria-label="Add log entry"
-            className="mt-2.5 grid grid-cols-[1fr_1.4fr_auto] items-center gap-2"
-          >
-            <Input
-              value={logTitle}
-              onChange={(e) => setLogTitle(e.target.value)}
-              placeholder="Log title"
-              aria-label="Log title"
-              className="h-8 text-xs"
-            />
-            <Input
-              value={logDetail}
-              onChange={(e) => setLogDetail(e.target.value)}
-              placeholder="Detail (optional)"
-              aria-label="Log detail"
-              className="h-8 text-xs"
-            />
-            <Button type="submit" size="sm" variant="secondary" disabled={!logTitle.trim()}>
-              <Plus className="h-3.5 w-3.5" aria-hidden />
-              Add
-            </Button>
-          </form>
+          {!readOnly && (
+            <form
+              onSubmit={handleAddLog}
+              aria-label="Add log entry"
+              className="mt-2.5 grid grid-cols-[1fr_1.4fr_auto] items-center gap-2"
+            >
+              <Input
+                value={logTitle}
+                onChange={(e) => setLogTitle(e.target.value)}
+                placeholder="Log title"
+                aria-label="Log title"
+                className="h-8 text-xs"
+              />
+              <Input
+                value={logDetail}
+                onChange={(e) => setLogDetail(e.target.value)}
+                placeholder="Detail (optional)"
+                aria-label="Log detail"
+                className="h-8 text-xs"
+              />
+              <Button type="submit" size="sm" variant="secondary" disabled={!logTitle.trim()}>
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Add
+              </Button>
+            </form>
+          )}
 
           {logGroups.length === 0 ? (
             <div className="mt-3 flex flex-col items-center rounded-lg border border-dashed border-line-strong/60 px-3 py-6 text-center">

@@ -26,14 +26,14 @@
 }
 
 .dark {
-  --color-canvas: 9 13 24; /* deep slate */
-  --color-card: 15 21 36;
-  --color-elev: 26 33 51;
-  --color-line: 33 42 63;
-  --color-line-strong: 51 61 85;
-  --color-ink: 237 241 247;
-  --color-sub: 148 160 180;
-  --color-faint: 100 112 133;
+  --color-canvas: 10 10 11; /* true neutral black — red stays an accent, not a tint */
+  --color-card: 20 20 22;
+  --color-elev: 31 31 34;
+  --color-line: 47 47 51;
+  --color-line-strong: 66 66 71;
+  --color-ink: 244 244 245;
+  --color-sub: 161 161 168;
+  --color-faint: 113 113 120;
   color-scheme: dark;
 }
 
@@ -75,7 +75,7 @@ body {
 @layer components {
   /* Card shell used across the app */
   .app-card {
-    @apply rounded-xl border border-line bg-card shadow-card;
+    @apply rounded-lg border border-line bg-card shadow-card;
   }
 
   /* Dense table cell defaults */
@@ -84,6 +84,11 @@ body {
   }
   .td-cell {
     @apply px-3 py-2.5 text-sm text-ink;
+  }
+
+  /* Small uppercase eyebrow label used above section titles */
+  .eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-wider text-faint;
   }
 }
 

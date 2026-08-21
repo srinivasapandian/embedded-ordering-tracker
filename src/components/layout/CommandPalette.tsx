@@ -45,7 +45,6 @@ export function CommandPalette() {
 
   const clients = useAppStore((s) => s.clients)
   const websites = useAppStore((s) => s.websites)
-  const features = useAppStore((s) => s.features)
   const teamMembers = useAppStore((s) => s.teamMembers)
 
   useEffect(() => {
@@ -73,7 +72,6 @@ export function CommandPalette() {
       { id: 'nav-migration', group: 'Commands', label: 'Go to Migration', icon: GitBranch, perform: () => go('/migration') },
       { id: 'nav-admin', group: 'Commands', label: 'Go to Admin Panel', icon: ShieldCheck, perform: () => go('/admin') },
       { id: 'create-client', group: 'Commands', label: 'Create Client', keywords: 'new add', icon: Plus, perform: () => go('/clients?new=1') },
-      { id: 'create-feature', group: 'Commands', label: 'Create Feature', keywords: 'new add', icon: Plus, perform: () => go('/features?new=1') },
       { id: 'start-migration', group: 'Commands', label: 'Start Migration', keywords: 'new add create', icon: Plus, perform: () => go('/migration?new=1') },
       {
         id: 'toggle-theme',
@@ -125,18 +123,6 @@ export function CommandPalette() {
         perform: () => go(`/admin?tab=websites&q=${encodeURIComponent(w.name)}`),
       }))
 
-    const featureMatches: PaletteItem[] = features
-      .filter((f) => matches(f.name))
-      .slice(0, 5)
-      .map((f) => ({
-        id: `feature-${f.id}`,
-        group: 'Features',
-        label: f.name,
-        sublabel: f.category,
-        icon: Boxes,
-        perform: () => go(`/features?q=${encodeURIComponent(f.name)}`),
-      }))
-
     const memberMatches: PaletteItem[] = teamMembers
       .filter((m) => matches(m.name))
       .slice(0, 4)
@@ -149,9 +135,9 @@ export function CommandPalette() {
         perform: () => go('/admin?tab=team'),
       }))
 
-    return [...cmdMatches, ...clientMatches, ...websiteMatches, ...featureMatches, ...memberMatches]
+    return [...cmdMatches, ...clientMatches, ...websiteMatches, ...memberMatches]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, commands, clients, websites, features, teamMembers])
+  }, [query, commands, clients, websites, teamMembers])
 
   useEffect(() => setActiveIndex(0), [query])
 
@@ -214,7 +200,7 @@ export function CommandPalette() {
                 aria-activedescendant={results[activeIndex] ? `palette-item-${results[activeIndex].id}` : undefined}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search clients, websites, features — or type a command…"
+                placeholder="Search clients, websites, team — or type a command…"
                 className="h-12 w-full bg-transparent text-sm text-ink placeholder:text-faint focus:outline-none"
               />
               <Kbd>Esc</Kbd>

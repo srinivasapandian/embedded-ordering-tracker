@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   createColumnHelper,
   flexRender,
@@ -9,21 +9,9 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { motion } from 'framer-motion'
-import {
-  CalendarX2,
-  ChevronLeft,
-  ChevronRight,
-  CircleCheck,
-  Ellipsis,
-  Pencil,
-  Plus,
-  SearchX,
-  Trash2,
-} from 'lucide-react'
+import { CalendarX2, ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
 import { Badge } from '@/components/common/Badge'
-import { Button, IconButton } from '@/components/common/Button'
-import { ConfirmDialog } from '@/components/common/ConfirmDialog'
-import { DropdownMenu } from '@/components/common/DropdownMenu'
+import { IconButton } from '@/components/common/Button'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FilterDropdown, type FilterOption } from '@/components/common/FilterDropdown'
 import { Pagination } from '@/components/common/Pagination'
@@ -32,9 +20,7 @@ import { SearchInput } from '@/components/common/SearchInput'
 import { Select } from '@/components/common/Select'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { SortableHeader, TableShell } from '@/components/common/table'
-import { UserAvatar } from '@/components/common/UserAvatar'
 import { useAppStore } from '@/store/appStore'
-import { toast } from '@/store/toastStore'
 import {
   PRIORITY_ITEM_STATUS_LABELS,
   PRIORITY_LABELS,
@@ -45,7 +31,6 @@ import {
 } from '@/types'
 import { cn } from '@/utils/cn'
 import { fmtDate, isOverdue, shiftWeekKey, weekKeyOf, weekLabel, weekRangeLabel } from '@/utils/date'
-import { PriorityFormModal } from './PriorityFormModal'
 
 /* ------------------------------------------------------------------ */
 /* Row shape + sort orders                                             */
@@ -73,14 +58,14 @@ const STATUS_DOTS: Record<PriorityItemStatus, string> = {
   'not-started': 'bg-red-500',
   'in-progress': 'bg-amber-500',
   blocked: 'bg-red-500',
-  review: 'bg-violet-500',
+  review: 'bg-slate-400',
   completed: 'bg-emerald-500',
 }
 
 const PRIORITY_DOTS: Record<Priority, string> = {
   high: 'bg-red-500',
   medium: 'bg-amber-500',
-  low: 'bg-sky-500',
+  low: 'bg-slate-400',
 }
 
 const STATUS_OPTIONS: FilterOption[] = (
@@ -100,24 +85,19 @@ const PRIORITY_OPTIONS: FilterOption[] = (Object.keys(PRIORITY_LABELS) as Priori
 const columnHelper = createColumnHelper<PriorityRow>()
 
 /* ------------------------------------------------------------------ */
-/* Component                                                           */
+/* Component — read-only; manage priorities from the Admin Panel.      */
 /* ------------------------------------------------------------------ */
 
 export function WeeklyPriorityTable() {
   const priorities = useAppStore((s) => s.priorities)
   const websites = useAppStore((s) => s.websites)
   const teamMembers = useAppStore((s) => s.teamMembers)
-  const updatePriority = useAppStore((s) => s.updatePriority)
-  const deletePriority = useAppStore((s) => s.deletePriority)
 
   const [selectedWeek, setSelectedWeek] = useState(() => weekKeyOf())
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [priorityFilter, setPriorityFilter] = useState<string[]>([])
   const [sorting, setSorting] = useState<SortingState>([])
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<PriorityItem | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<PriorityItem | null>(null)
 
   /* Week options: weeks present in the data ∪ current week ± 2. */
   const weekOptions = useMemo(() => {
@@ -152,32 +132,6 @@ export function WeeklyPriorityTable() {
     })
   }, [weekRows, search, statusFilter, priorityFilter])
 
-  /* ------------------------------ Actions --------------------------- */
-
-  const openAdd = useCallback(() => {
-    setEditing(null)
-    setModalOpen(true)
-  }, [])
-
-  const openEdit = useCallback((item: PriorityItem) => {
-    setEditing(item)
-    setModalOpen(true)
-  }, [])
-
-  const markCompleted = useCallback(
-    (item: PriorityItem) => {
-      updatePriority(item.id, { status: 'completed' })
-      toast.success('Marked completed', `"${item.title}" moved to Completed.`)
-    },
-    [updatePriority],
-  )
-
-  const confirmDelete = useCallback(() => {
-    if (!deleteTarget) return
-    deletePriority(deleteTarget.id)
-    toast.success('Priority deleted', `"${deleteTarget.title}" removed from ${weekLabel(deleteTarget.weekStart)}.`)
-  }, [deleteTarget, deletePriority])
-
   /* ------------------------------ Columns --------------------------- */
 
   const columns = useMemo(
@@ -198,13 +152,6 @@ export function WeeklyPriorityTable() {
         header: ({ column }) => <SortableHeader column={column}>Priority</SortableHeader>,
         meta: { label: 'Priority' },
         cell: ({ row }) => <PriorityBadge priority={row.original.priority} />,
-      }),
-      columnHelper.accessor((r) => r.member?.name ?? 'Unassigned', {
-        id: 'assignee',
-        enableSorting: false,
-        header: 'Assigned To',
-        meta: { label: 'Assigned To' },
-        cell: ({ row }) => <UserAvatar member={row.original.member ?? null} size="sm" showName />,
       }),
       columnHelper.accessor('dueDate', {
         id: 'dueDate',
@@ -237,53 +184,8 @@ export function WeeklyPriorityTable() {
         meta: { label: 'Status' },
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       }),
-      columnHelper.display({
-        id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
-        meta: { label: 'Actions' },
-        cell: ({ row }) => {
-          const item = row.original
-          return (
-            <div className="flex justify-end">
-              <DropdownMenu
-                align="end"
-                trigger={(props) => (
-                  <IconButton size="sm" aria-label={`Actions for ${item.title}`} {...props}>
-                    <Ellipsis className="h-4 w-4" aria-hidden />
-                  </IconButton>
-                )}
-                groups={[
-                  {
-                    items: [
-                      { key: 'edit', label: 'Edit', icon: Pencil, onSelect: () => openEdit(item) },
-                      {
-                        key: 'complete',
-                        label: 'Mark completed',
-                        icon: CircleCheck,
-                        disabled: item.status === 'completed',
-                        onSelect: () => markCompleted(item),
-                      },
-                    ],
-                  },
-                  {
-                    items: [
-                      {
-                        key: 'delete',
-                        label: 'Delete',
-                        icon: Trash2,
-                        danger: true,
-                        onSelect: () => setDeleteTarget(item),
-                      },
-                    ],
-                  },
-                ]}
-              />
-            </div>
-          )
-        },
-      }),
     ],
-    [openEdit, markCompleted],
+    [],
   )
 
   const table = useReactTable({
@@ -355,10 +257,6 @@ export function WeeklyPriorityTable() {
             >
               <ChevronRight className="h-4 w-4" aria-hidden />
             </IconButton>
-            <Button variant="primary" onClick={openAdd}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Add priority
-            </Button>
           </div>
         </div>
 
@@ -366,9 +264,7 @@ export function WeeklyPriorityTable() {
           <EmptyState
             icon={CalendarX2}
             title="No priorities planned"
-            description={`Nothing is scheduled for ${weekLabel(selectedWeek)} yet. Add the first priority to start planning this week.`}
-            actionLabel="Add priority"
-            onAction={openAdd}
+            description={`Nothing is scheduled for ${weekLabel(selectedWeek)} yet — add tasks from the Admin Panel's Priorities tab.`}
           />
         ) : (
           <>
@@ -413,11 +309,7 @@ export function WeeklyPriorityTable() {
                     {table.getHeaderGroups().map((hg) => (
                       <tr key={hg.id} className="border-b border-line bg-elev/40">
                         {hg.headers.map((h) => (
-                          <th
-                            key={h.id}
-                            scope="col"
-                            className={cn('th-cell', h.column.id === 'actions' && 'w-12 text-right')}
-                          >
+                          <th key={h.id} scope="col" className="th-cell">
                             {h.isPlaceholder
                               ? null
                               : flexRender(h.column.columnDef.header, h.getContext())}
@@ -433,10 +325,7 @@ export function WeeklyPriorityTable() {
                         className="border-b border-line/60 transition-colors last:border-0 hover:bg-elev/60"
                       >
                         {row.getVisibleCells().map((cell) => (
-                          <td
-                            key={cell.id}
-                            className={cn('td-cell', cell.column.id === 'actions' && 'w-12')}
-                          >
+                          <td key={cell.id} className="td-cell">
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>
                         ))}
@@ -459,27 +348,6 @@ export function WeeklyPriorityTable() {
           </>
         )}
       </motion.div>
-
-      <PriorityFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        editing={editing}
-        weekStart={selectedWeek}
-      />
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-        destructive
-        title="Delete priority"
-        confirmLabel="Delete"
-        description={
-          deleteTarget
-            ? `This will permanently remove "${deleteTarget.title}" from ${weekLabel(deleteTarget.weekStart)}. This action cannot be undone.`
-            : undefined
-        }
-      />
     </section>
   )
 }

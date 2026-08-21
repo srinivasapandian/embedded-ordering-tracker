@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Admin-only read/write, per the "Storage access" decision — nothing in this
+// console is public-facing. Cross-service rule reads the same users/{uid}
+// role doc that firestore.rules uses, so there's one source of truth for roles.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function canEditClient() {
+      return isSignedIn() && myRole() in ['super-admin', 'admin', 'manager', 'developer'];
+    }
+
+    match /clients/{clientId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if canEditClient();
+    }
+  }
+}

@@ -1,4 +1,4 @@
-# Maghil Ops Console — Architecture & Module Contract
+# Brisque Ops Console — Architecture & Module Contract
 
 Frontend-only React 19 + Vite + TypeScript admin dashboard. No backend: all data
 lives in a centralized Zustand store persisted to localStorage.

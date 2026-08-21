@@ -30,6 +30,27 @@ export type FeatureCategory =
   | 'infrastructure'
 export type DeploymentStatus = 'deployed' | 'testing' | 'planned'
 export type Role = 'super-admin' | 'admin' | 'manager' | 'developer' | 'viewer'
+export type Environment = 'Production' | 'Staging' | 'QA'
+export type QaSignoff = 'signed-off' | 'pending' | 'not-required'
+/** Rollout state for a per-client capability (Offers, Loyalty, Reservation, Event Ordering). */
+export type CapabilityState = 'enabled' | 'in-progress' | 'unavailable'
+
+/**
+ * Firestore `users/{uid}` doc — keyed by Firebase Auth UID. This is the
+ * Firebase-backed profile/role source; `TeamMember` below stays for the
+ * still-local-only Zustand data until the rest of the store is wired to
+ * Firestore.
+ */
+export interface UserProfile {
+  uid: string
+  name: string
+  email: string
+  role: Role
+  title: string
+  color: string
+  active: boolean
+  createdAt: string // ISO
+}
 
 export interface TeamMember {
   id: string
@@ -50,20 +71,26 @@ export interface ActivityEvent {
   description?: string
 }
 
+/** Per-client rollout state for the four capabilities the Admin Panel manages. */
+export interface ClientCapabilities {
+  offers: CapabilityState
+  loyalty: CapabilityState
+  reservation: CapabilityState
+  eventOrdering: CapabilityState
+}
+
 export interface Client {
   id: string
   name: string
-  contactName: string
-  email: string
   phone: string
   location: string
   status: ClientStatus
   /** Onboarding journey stage (drives the Timeline view) */
   stage: ClientStage
   priority: Priority
-  assignedToId: string | null
   notes: string
-  activity: ActivityEvent[]
+  /** Feature rollout state — edited from the Admin Panel's Features tab. */
+  capabilities: ClientCapabilities
   createdAt: string
   updatedAt: string
 }
@@ -78,6 +105,12 @@ export interface Website {
   orderingStage: string // human label, e.g. 'Menu setup', 'Payments QA'
   orderingStartDate: string | null
   orderingCompletedDate: string | null
+  /** Deployment tier this site currently runs in. */
+  environment: Environment
+  /** QA regression sign-off state. */
+  qaSignoff: QaSignoff
+  /** Public URL customers/reviewers use (defaults to https://{domain}). */
+  liveUrl: string
   addedAt: string
   updatedAt: string
 }
@@ -112,9 +145,12 @@ export interface Migration {
   dueDate: string // ISO date
   startedAt: string
   updatedAt: string
-  logs: MigrationLog[]
   /** Sort position inside its kanban column */
   order: number
+  /** Target quarter for cutover, e.g. 'Q1 2026'. */
+  quarter: string
+  /** Framework this migration is moving the website to. */
+  targetStack: Framework
 }
 
 export interface PriorityItem {
@@ -288,3 +324,40 @@ export const MIGRATION_STAGES_ORDERED: MigrationStage[] = [
   'testing',
   'completed',
 ]
+
+export const ENVIRONMENT_LABELS: Record<Environment, string> = {
+  Production: 'Production',
+  Staging: 'Staging',
+  QA: 'QA',
+}
+
+export const ENVIRONMENTS_ORDERED: Environment[] = ['Production', 'Staging', 'QA']
+
+export const QA_SIGNOFF_LABELS: Record<QaSignoff, string> = {
+  'signed-off': 'Signed Off',
+  pending: 'Pending',
+  'not-required': 'Not Required',
+}
+
+export const QA_SIGNOFF_ORDERED: QaSignoff[] = ['signed-off', 'pending', 'not-required']
+
+export const CAPABILITY_STATE_LABELS: Record<CapabilityState, string> = {
+  enabled: 'Enabled',
+  'in-progress': 'In Progress',
+  unavailable: 'Not Available',
+}
+
+export const CAPABILITY_STATES_ORDERED: CapabilityState[] = ['enabled', 'in-progress', 'unavailable']
+
+export const CAPABILITY_LABELS: Record<keyof ClientCapabilities, string> = {
+  offers: 'Offers',
+  loyalty: 'Loyalty',
+  reservation: 'Reservation',
+  eventOrdering: 'Event Ordering',
+}
+
+/** Quarter options offered by Migration Quarter pickers (current year ± 1). */
+export function quarterOptions(centerYear = new Date().getFullYear()): string[] {
+  const years = [centerYear - 1, centerYear, centerYear + 1]
+  return years.flatMap((y) => ['Q1', 'Q2', 'Q3', 'Q4'].map((q) => `${q} ${y}`))
+}

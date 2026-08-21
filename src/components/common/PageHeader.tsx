@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { cn } from '@/utils/cn'
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 
 interface PageHeaderProps {
   title: string
@@ -19,7 +20,8 @@ export function PageHeader({ title, description, actions, children, className }:
       transition={{ duration: 0.25, ease: 'easeOut' }}
       className={cn('mb-5', className)}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <Breadcrumbs />
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight text-ink">{title}</h1>
           {description && <div className="mt-0.5 text-sm text-sub">{description}</div>}

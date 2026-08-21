@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, type LucideIcon } from 'lucide-react'
 import type { AuditLog, FeatureCategory, TeamMember } from '@/types'
 import { ROLE_LABELS } from '@/types'
-import { useAppStore } from '@/store/appStore'
+import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/utils/cn'
 import type { BadgeTone } from '@/components/common/Badge'
 import { Button, IconButton } from '@/components/common/Button'
@@ -17,10 +17,10 @@ import { DataTablePagination, TableShell } from '@/components/common/table'
 /* Permission helpers                                                  */
 /* ------------------------------------------------------------------ */
 
-/** Acting-role permission helpers shared across every Admin manager. */
+/** Permission helpers shared across every Admin manager — backed by the real signed-in user's role. */
 export function usePerms() {
-  const actingRole = useAppStore((s) => s.actingRole)
-  const can = useAppStore((s) => s.can)
+  const { profile, can } = useAuth()
+  const actingRole = profile?.role ?? 'viewer'
   const denyReason = `Not available for ${ROLE_LABELS[actingRole]}`
   return { actingRole, can, denyReason }
 }
@@ -87,10 +87,12 @@ interface AdminDataTableProps<T> {
   rowClassName?: (row: T) => string | undefined
   /** Override the page-size options (default 10/20/30/50). */
   pageSizeOptions?: number[]
+  /** Pins the header row to the top of the table's scroll container. */
+  stickyHeader?: boolean
 }
 
 /** Standard Admin table body: th/td cells, hover rows, pagination footer. */
-export function AdminDataTable<T>({ table, empty, rowClassName, pageSizeOptions }: AdminDataTableProps<T>) {
+export function AdminDataTable<T>({ table, empty, rowClassName, pageSizeOptions, stickyHeader }: AdminDataTableProps<T>) {
   const rows = table.getRowModel().rows
   const pageIndex = table.getState().pagination.pageIndex
   const pageCount = table.getPageCount()
@@ -105,7 +107,7 @@ export function AdminDataTable<T>({ table, empty, rowClassName, pageSizeOptions 
       <TableShell>
         <thead>
           {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id} className="border-b border-line bg-elev/40">
+            <tr key={hg.id} className={cn('border-b border-line bg-elev/40', stickyHeader && 'sticky top-0 z-10 backdrop-blur')}>
               {hg.headers.map((header) => {
                 const size = header.column.columnDef.size
                 return (

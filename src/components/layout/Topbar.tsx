@@ -1,27 +1,37 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Moon, RotateCcw, Search, Settings, Sun, User } from 'lucide-react'
-import { useAppStore } from '@/store/appStore'
+import { LogOut, Menu, Moon, Search, Settings, Sun, User } from 'lucide-react'
 import { useUiStore } from '@/store/uiStore'
+import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
-import { toast } from '@/store/toastStore'
 import { Kbd } from '@/components/common/Kbd'
 import { Tooltip } from '@/components/common/Tooltip'
 import { DropdownMenu } from '@/components/common/DropdownMenu'
 import { UserAvatar } from '@/components/common/UserAvatar'
-import { ROLE_LABELS } from '@/types'
-import { Breadcrumbs } from './Breadcrumbs'
 import { NotificationsPopover } from './NotificationsPopover'
 
 export function Topbar() {
   const setCommandPaletteOpen = useUiStore((s) => s.setCommandPaletteOpen)
+  const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
   const { theme, toggleTheme } = useTheme()
-  const currentUser = useAppStore((s) => s.teamMembers.find((m) => m.id === s.currentUserId))
-  const resetAll = useAppStore((s) => s.resetAll)
+  const { profile, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/90 px-5 backdrop-blur">
-      <Breadcrumbs />
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/90 px-4 backdrop-blur sm:px-5">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation menu"
+          className="focus-ring flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sub transition-colors hover:bg-elev hover:text-ink lg:hidden"
+        >
+          <Menu className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+        <div className="min-w-0 leading-tight">
+          <h1 className="truncate text-sm font-bold tracking-tight text-ink">Brisque Ops</h1>
+          <p className="hidden truncate text-2xs font-medium text-faint sm:block">Operations Command Center</p>
+        </div>
+      </div>
 
       <div className="flex items-center gap-1.5">
         {/* Global search / command palette trigger */}
@@ -69,14 +79,10 @@ export function Topbar() {
             <button
               type="button"
               {...props}
-              className="focus-ring ml-1 flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 transition-colors hover:bg-elev"
-              aria-label="Open profile menu"
+              className="focus-ring ml-1 flex items-center rounded-full p-0.5 transition-colors hover:bg-elev"
+              aria-label={profile ? `Open profile menu for ${profile.name}` : 'Open profile menu'}
             >
-              <UserAvatar member={currentUser} size="md" />
-              <span className="hidden text-left leading-tight lg:block">
-                <span className="block max-w-32 truncate text-sm font-medium text-ink">{currentUser?.name}</span>
-                <span className="block text-2xs text-faint">{currentUser ? ROLE_LABELS[currentUser.role] : ''}</span>
-              </span>
+              <UserAvatar member={profile} size="md" />
             </button>
           )}
           groups={[
@@ -99,19 +105,12 @@ export function Topbar() {
             {
               items: [
                 {
-                  key: 'reset',
-                  label: 'Reset demo data',
-                  icon: RotateCcw,
-                  onSelect: () => {
-                    resetAll()
-                    toast.success('Demo data reset', 'All records restored to the seed dataset.')
-                  },
-                },
-                {
                   key: 'signout',
                   label: 'Sign out',
                   icon: LogOut,
-                  onSelect: () => toast.info('Demo mode', 'Authentication is simulated in this frontend-only build.'),
+                  onSelect: () => {
+                    void logout().then(() => navigate('/login'))
+                  },
                 },
               ],
             },

@@ -1,8 +1,12 @@
 import { useMemo } from 'react'
 import { MoveRight } from 'lucide-react'
 import type { TeamMember } from '@/types'
+import { CAPABILITY_LABELS, CAPABILITY_STATE_LABELS, ENVIRONMENT_LABELS, QA_SIGNOFF_LABELS } from '@/types'
 import { memberById } from '@/utils/selectors'
 import { fmtDate, relativeDay } from '@/utils/date'
+import { useClientActivity } from '@/hooks/useClientActivity'
+import { cn } from '@/utils/cn'
+import { Badge } from '@/components/common/Badge'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { ProgressBar } from '@/components/common/ProgressBar'
 import { UserAvatar } from '@/components/common/UserAvatar'
@@ -24,8 +28,16 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-/** Detail grid rendered when a tracker row is expanded. */
-export function ClientExpansionPanel({ row, members }: { row: ClientRow; members: TeamMember[] }) {
+/** Detail grid rendered when a tracker row is expanded (or shown in a drawer). */
+export function ClientExpansionPanel({
+  row,
+  members,
+  className,
+}: {
+  row: ClientRow
+  members: TeamMember[]
+  className?: string
+}) {
   const { client, site, migration } = row
   const developer = memberById(members, migration?.developerId)
   const openMigration = migration && migration.stage !== 'completed' ? migration : undefined
@@ -35,22 +47,20 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
       ? 100
       : 0
 
+  const activity = useClientActivity(client.id, 6)
   const activityEntries = useMemo<TimelineEntry[]>(
     () =>
-      [...client.activity]
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 6)
-        .map((a) => ({
-          id: a.id,
-          dateLabel: relativeDay(a.date),
-          title: a.title,
-          description: a.description,
-        })),
-    [client.activity],
+      activity.map((a) => ({
+        id: a.id,
+        dateLabel: relativeDay(a.date),
+        title: a.title,
+        description: a.description,
+      })),
+    [activity],
   )
 
   return (
-    <div className="grid gap-x-8 gap-y-5 border-t border-line bg-elev/40 px-4 py-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className={cn('grid gap-x-8 gap-y-5 border-t border-line bg-elev/40 px-4 py-4 md:grid-cols-2 xl:grid-cols-4', className)}>
       {/* a) Client information */}
       <section aria-label={`Client information for ${client.name}`}>
         <SectionTitle>Client Information</SectionTitle>
@@ -58,8 +68,7 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
           <InfoRow label="Client" value={client.name} />
           <InfoRow label="Primary website" value={site?.domain ?? '—'} />
           <InfoRow label="Location" value={client.location} />
-          <InfoRow label="Contact" value={client.contactName || '—'} />
-          <InfoRow label="Email" value={client.email || '—'} />
+          <InfoRow label="Phone" value={client.phone || '—'} />
         </dl>
         {client.notes && (
           <p className="mt-2.5 rounded-lg border border-line bg-card px-2.5 py-2 text-xs leading-relaxed text-sub">
@@ -70,10 +79,13 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
 
       {/* b) Ordering */}
       <section aria-label={`Ordering status for ${client.name}`}>
-        <SectionTitle>Ordering</SectionTitle>
+        <SectionTitle>Ordering & QA</SectionTitle>
         {site ? (
           <div className="mt-2.5 space-y-2">
-            <StatusBadge status={site.orderingStatus} />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <StatusBadge status={site.orderingStatus} />
+              <Badge tone="slate">{ENVIRONMENT_LABELS[site.environment]}</Badge>
+            </div>
             <dl className="space-y-1.5 pt-0.5">
               <InfoRow
                 label="Start date"
@@ -84,6 +96,8 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
                 value={site.orderingCompletedDate ? fmtDate(site.orderingCompletedDate) : '—'}
               />
               <InfoRow label="Current stage" value={site.orderingStage} />
+              <InfoRow label="QA sign-off" value={QA_SIGNOFF_LABELS[site.qaSignoff]} />
+              <InfoRow label="Live URL" value={site.liveUrl} />
             </dl>
           </div>
         ) : (
@@ -99,7 +113,7 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
             <div className="flex flex-wrap items-center gap-1.5">
               <StatusBadge status={site.framework} />
               <MoveRight className="h-3.5 w-3.5 text-faint" aria-hidden />
-              <StatusBadge status="nextjs" />
+              <StatusBadge status={migration?.targetStack ?? 'nextjs'} />
             </div>
             <ProgressBar
               value={migrationProgress}
@@ -109,6 +123,7 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
               aria-label={`Migration progress for ${site.name}`}
             />
             <dl className="space-y-1.5">
+              {migration && <InfoRow label="Migration quarter" value={migration.quarter} />}
               <InfoRow
                 label="Assigned developer"
                 value={
@@ -131,7 +146,17 @@ export function ClientExpansionPanel({ row, members }: { row: ClientRow; members
         )}
       </section>
 
-      {/* d) Activity */}
+      {/* d) Features */}
+      <section aria-label={`Feature enablement for ${client.name}`}>
+        <SectionTitle>Feature Enablement</SectionTitle>
+        <dl className="mt-2.5 space-y-1.5">
+          {(Object.keys(CAPABILITY_LABELS) as Array<keyof typeof client.capabilities>).map((key) => (
+            <InfoRow key={key} label={CAPABILITY_LABELS[key]} value={CAPABILITY_STATE_LABELS[client.capabilities[key]]} />
+          ))}
+        </dl>
+      </section>
+
+      {/* e) Activity */}
       <section aria-label={`Recent activity for ${client.name}`}>
         <SectionTitle>Activity</SectionTitle>
         <div className="mt-2.5">

@@ -1,61 +1,73 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import type { DocumentData } from 'firebase/firestore'
 import type {
   AppNotification,
   AuditLog,
+  CapabilityState,
   Client,
+  ClientCapabilities,
   ClientStage,
   ClientStatus,
-  Feature,
+  Environment,
   Framework,
   Migration,
   MigrationStage,
   OrderingStatus,
-  Permission,
   Priority,
   PriorityItem,
-  Role,
+  QaSignoff,
   TeamMember,
   Website,
 } from '@/types'
 import {
+  CAPABILITY_LABELS,
+  CAPABILITY_STATE_LABELS,
   CLIENT_STATUS_LABELS,
   FRAMEWORK_LABELS,
   MIGRATION_STAGE_LABELS,
   ORDERING_STATUS_LABELS,
   PRIORITY_LABELS,
-  ROLE_LABELS,
-  ROLE_PERMISSIONS,
 } from '@/types'
-import { buildSeedState, type SeedState } from '@/data'
-import { uid } from '@/utils/id'
-import { clamp } from '@/utils/format'
+import {
+  addNewDoc,
+  addSubDoc,
+  collectSubDocRefs,
+  newBatch,
+  newRef,
+  newSubRef,
+  nowIso,
+  patchDoc,
+  refAt,
+  removeDoc,
+  subscribeCollection,
+} from '@/firebase/collection'
+import { subscribeUserProfiles } from '@/firebase/firestore'
+import { toast } from '@/store/toastStore'
 
 /* ------------------------------------------------------------------ */
 /* Shapes                                                              */
 /* ------------------------------------------------------------------ */
 
-/** Values collected by the Create/Edit Client modal. */
+/** Values collected by the Add Client modal. Website domain is optional — no domain means no website gets created yet. */
 export interface ClientFormValues {
   name: string
-  domain: string
+  domain?: string
   location: string
-  email: string
   orderingStatus: OrderingStatus
   framework: Framework
   priority: Priority
-  assignedToId: string | null
   notes: string
-  contactName?: string
   phone?: string
   status?: ClientStatus
   stage?: ClientStage
+  environment?: Environment
+  qaSignoff?: QaSignoff
+  liveUrl?: string
 }
 
 export interface BulkClientPatch {
   status?: ClientStatus
   priority?: Priority
-  assignedToId?: string | null
   stage?: ClientStage
   orderingStatus?: OrderingStatus
   framework?: Framework
@@ -64,97 +76,66 @@ export interface BulkClientPatch {
 export interface RealtimeEvent {
   id: string
   message: string
-  /** Entity that changed — modules use this to flash an "Updated" indicator. */
   migrationId: string | null
   at: number
 }
 
-interface AppState extends SeedState {
-  currentUserId: string
-  /** Role the UI is simulating (Admin Panel "act as" control). */
-  actingRole: Role
+interface AppState {
+  clients: Client[]
+  websites: Website[]
+  migrations: Migration[]
+  priorities: PriorityItem[]
+  teamMembers: TeamMember[]
+  auditLogs: AuditLog[]
+  notifications: AppNotification[]
+  /** Never set anymore (the mock realtime ticker is gone) — kept so
+   *  LiveIndicator/MigrationCard degrade to their idle state instead of erroring. */
   lastRealtimeEvent: RealtimeEvent | null
+  /** Name written into new audit log entries — kept in sync with the signed-in user by AuthContext. */
+  currentActorName: string
 
-  /* Derived-permission helper */
-  can: (permission: Permission) => boolean
-  setActingRole: (role: Role) => void
+  setCurrentActor: (name: string) => void
+  /** Attaches onSnapshot listeners for every collection; returns the combined unsubscribe. */
+  initFirestoreSync: () => () => void
 
   /* Clients */
-  saveClientForm: (clientId: string | null, values: ClientFormValues) => string
-  updateClient: (id: string, patch: Partial<Client>) => void
-  deleteClient: (id: string) => void
-  deleteClients: (ids: string[]) => void
-  duplicateClient: (id: string) => string | null
-  bulkUpdateClients: (ids: string[], patch: BulkClientPatch) => void
+  createClient: (values: ClientFormValues) => Promise<string>
+  updateClient: (id: string, patch: Partial<Client>) => Promise<void>
+  deleteClient: (id: string) => Promise<void>
+  deleteClients: (ids: string[]) => Promise<void>
+  bulkUpdateClients: (ids: string[], patch: BulkClientPatch) => Promise<void>
+  updateClientCapability: (id: string, capability: keyof ClientCapabilities, state: CapabilityState) => Promise<void>
+  bulkUpdateClientCapability: (ids: string[], capability: keyof ClientCapabilities, state: CapabilityState) => Promise<void>
 
   /* Websites */
-  addWebsite: (input: Omit<Website, 'id' | 'addedAt' | 'updatedAt'>) => string
-  updateWebsite: (id: string, patch: Partial<Website>) => void
-  deleteWebsite: (id: string) => void
-
-  /* Features */
-  addFeature: (input: Omit<Feature, 'id' | 'createdAt' | 'updatedAt'>) => string
-  updateFeature: (id: string, patch: Partial<Feature>) => void
-  deleteFeature: (id: string) => void
-  duplicateFeature: (id: string) => string | null
-  toggleFeature: (id: string) => void
+  addWebsite: (input: Omit<Website, 'id' | 'addedAt' | 'updatedAt'>) => Promise<string>
+  updateWebsite: (id: string, patch: Partial<Website>) => Promise<void>
+  deleteWebsite: (id: string) => Promise<void>
 
   /* Migrations */
-  addMigration: (input: Omit<Migration, 'id' | 'startedAt' | 'updatedAt' | 'logs' | 'order'>) => string
-  updateMigration: (id: string, patch: Partial<Migration>) => void
-  moveMigration: (id: string, stage: MigrationStage, order?: number) => void
-  appendMigrationLog: (id: string, title: string, detail: string) => void
-  deleteMigrations: (ids: string[]) => void
+  updateMigration: (id: string, patch: Partial<Migration>) => Promise<void>
+  moveMigration: (id: string, stage: MigrationStage, order?: number) => Promise<void>
+  appendMigrationLog: (id: string, title: string, detail: string) => Promise<void>
+  deleteMigrations: (ids: string[]) => Promise<void>
   bulkUpdateMigrations: (
     ids: string[],
     patch: Partial<Pick<Migration, 'stage' | 'developerId' | 'priority'>>,
-  ) => void
+  ) => Promise<void>
 
   /* Weekly priorities */
-  addPriority: (input: Omit<PriorityItem, 'id'>) => string
-  updatePriority: (id: string, patch: Partial<PriorityItem>) => void
-  deletePriority: (id: string) => void
-
-  /* Team members / users */
-  addTeamMember: (input: Omit<TeamMember, 'id' | 'createdAt'>) => string
-  updateTeamMember: (id: string, patch: Partial<TeamMember>) => void
-  deleteTeamMember: (id: string) => void
+  addPriority: (input: Omit<PriorityItem, 'id'>) => Promise<string>
+  updatePriority: (id: string, patch: Partial<PriorityItem>) => Promise<void>
+  deletePriority: (id: string) => Promise<void>
 
   /* Notifications */
-  addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void
-  markNotificationRead: (id: string) => void
-  markAllNotificationsRead: () => void
-
-  /* System */
-  resetAll: () => void
-  tickRealtime: () => string | null
+  addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => Promise<void>
+  markNotificationRead: (id: string) => Promise<void>
+  markAllNotificationsRead: () => Promise<void>
 }
 
 /* ------------------------------------------------------------------ */
 /* Internal helpers                                                    */
 /* ------------------------------------------------------------------ */
-
-const nowIso = () => new Date().toISOString()
-
-function makeAudit(
-  actor: string,
-  action: string,
-  module: AuditLog['module'],
-  recordName: string,
-  previousValue: string,
-  newValue: string,
-): AuditLog {
-  return {
-    id: uid('a'),
-    timestamp: nowIso(),
-    actor,
-    action,
-    module,
-    recordName,
-    previousValue,
-    newValue,
-  }
-}
 
 const AUDIT_CAP = 400
 
@@ -171,787 +152,614 @@ const STAGE_MIN_PROGRESS: Record<MigrationStage, number> = {
   completed: 100,
 }
 
-const REALTIME_LOGS: Array<[string, string]> = [
-  ['Component batch migrated', 'Another set of shared components moved to server components'],
-  ['Menu pages converted', 'Menu detail routes now render on the server'],
-  ['Bundle size reduced', 'Client JS trimmed after removing legacy router code'],
-  ['Accessibility pass', 'Focus order and aria labels verified on migrated pages'],
-  ['Cache headers tuned', 'Static assets now served with immutable cache headers'],
-]
+/** Runs a Firestore operation; on failure, surfaces a toast and rethrows so awaiting callers can react. */
+async function withErrorToast<T>(op: () => Promise<T>, failMessage: string): Promise<T> {
+  try {
+    return await op()
+  } catch (error) {
+    console.error(failMessage, error)
+    toast.error('Something went wrong', failMessage)
+    throw error
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Normalization                                                       */
+/* Firestore documents aren't type-checked — a doc created by hand in  */
+/* the Console (or a future bug) can be missing fields the rest of the */
+/* app assumes exist. Every collection gets defaulted here, once, so   */
+/* every consumer downstream can keep trusting the TS shape.           */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_CAPABILITIES: ClientCapabilities = {
+  offers: 'unavailable',
+  loyalty: 'unavailable',
+  reservation: 'unavailable',
+  eventOrdering: 'unavailable',
+}
+
+/**
+ * Every date field in these collections is meant to be a plain ISO string —
+ * but Firestore Console's "Add field" UI defaults to its native Timestamp
+ * type, so a hand-created doc can have the *wrong type*, not just a missing
+ * value. Coerce either shape to an ISO string instead of assuming.
+ */
+function coerceIso(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object' && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().toISOString()
+  }
+  return null
+}
+const isoOrNow = (value: unknown): string => coerceIso(value) ?? nowIso()
+const isoOrNull = (value: unknown): string | null => (value == null ? null : coerceIso(value))
+
+// Every field is listed explicitly (not spread-then-patched) so a doc
+// missing ANY field — not just the ones we've previously hit — still comes
+// out fully shaped.
+
+function normalizeClient(raw: Client): Client {
+  return {
+    id: raw.id,
+    name: raw.name ?? 'Untitled client',
+    phone: raw.phone ?? '',
+    location: raw.location ?? '',
+    status: raw.status ?? 'in-progress',
+    stage: raw.stage ?? 'onboarded',
+    priority: raw.priority ?? 'medium',
+    notes: raw.notes ?? '',
+    capabilities: { ...DEFAULT_CAPABILITIES, ...raw.capabilities },
+    createdAt: isoOrNow(raw.createdAt),
+    updatedAt: isoOrNow(raw.updatedAt),
+  }
+}
+
+function normalizeWebsite(raw: Website): Website {
+  const domain = raw.domain ?? ''
+  return {
+    id: raw.id,
+    name: raw.name ?? 'Untitled site',
+    domain,
+    clientId: raw.clientId ?? '',
+    framework: raw.framework ?? 'react',
+    orderingStatus: raw.orderingStatus ?? 'not-started',
+    orderingStage: raw.orderingStage ?? 'Not scheduled',
+    orderingStartDate: isoOrNull(raw.orderingStartDate),
+    orderingCompletedDate: isoOrNull(raw.orderingCompletedDate),
+    environment: raw.environment ?? 'Staging',
+    qaSignoff: raw.qaSignoff ?? 'pending',
+    liveUrl: raw.liveUrl || (domain ? `https://${domain}` : ''),
+    addedAt: isoOrNow(raw.addedAt),
+    updatedAt: isoOrNow(raw.updatedAt),
+  }
+}
+
+function normalizeMigration(raw: Migration): Migration {
+  return {
+    id: raw.id,
+    websiteId: raw.websiteId ?? '',
+    developerId: raw.developerId ?? null,
+    stage: raw.stage ?? 'planning',
+    progress: raw.progress ?? 0,
+    priority: raw.priority ?? 'medium',
+    dueDate: (coerceIso(raw.dueDate) ?? nowIso()).slice(0, 10),
+    order: raw.order ?? 0,
+    quarter: raw.quarter ?? '',
+    targetStack: raw.targetStack ?? 'nextjs',
+    startedAt: isoOrNow(raw.startedAt),
+    updatedAt: isoOrNow(raw.updatedAt),
+  }
+}
+
+function normalizePriority(raw: PriorityItem): PriorityItem {
+  return {
+    id: raw.id,
+    websiteId: raw.websiteId ?? '',
+    weekStart: (coerceIso(raw.weekStart) ?? '').slice(0, 10),
+    title: raw.title ?? 'Untitled',
+    priority: raw.priority ?? 'medium',
+    assignedToId: raw.assignedToId ?? null,
+    dueDate: (coerceIso(raw.dueDate) ?? nowIso()).slice(0, 10),
+    status: raw.status ?? 'not-started',
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Store                                                               */
 /* ------------------------------------------------------------------ */
 
-export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => {
-      /** Append an audit entry (newest first) as part of a state patch. */
-      const audit = (
-        state: Pick<AppState, 'auditLogs' | 'teamMembers' | 'currentUserId'>,
-        action: string,
-        module: AuditLog['module'],
-        recordName: string,
-        previousValue: string,
-        newValue: string,
-        actorOverride?: string,
-      ): AuditLog[] => {
-        const actor =
-          actorOverride ?? state.teamMembers.find((m) => m.id === state.currentUserId)?.name ?? 'Admin'
-        return [
-          makeAudit(actor, action, module, recordName, previousValue, newValue),
-          ...state.auditLogs,
-        ].slice(0, AUDIT_CAP)
-      }
+export const useAppStore = create<AppState>()((set, get) => {
+  /** Fire-and-forget audit log write — never blocks the action it documents. */
+  const audit = (
+    action: string,
+    module: AuditLog['module'],
+    recordName: string,
+    previousValue: string,
+    newValue: string,
+  ) => {
+    addNewDoc('auditLogs', {
+      timestamp: nowIso(),
+      actor: get().currentActorName,
+      action,
+      module,
+      recordName,
+      previousValue,
+      newValue,
+    }).catch((error) => console.error('Failed to write audit log', error))
+  }
 
-      return {
-        ...buildSeedState(),
-        currentUserId: 'tm01',
-        actingRole: 'super-admin' as Role,
-        lastRealtimeEvent: null,
+  return {
+    clients: [],
+    websites: [],
+    migrations: [],
+    priorities: [],
+    teamMembers: [],
+    auditLogs: [],
+    notifications: [],
+    lastRealtimeEvent: null,
+    currentActorName: 'Admin',
 
-        can: (permission) => ROLE_PERMISSIONS[get().actingRole].includes(permission),
+    setCurrentActor: (name) => set({ currentActorName: name }),
 
-        setActingRole: (role) =>
-          set((s) => ({
-            actingRole: role,
-            auditLogs: audit(s, 'Switched Acting Role', 'System', 'Session', ROLE_LABELS[s.actingRole], ROLE_LABELS[role]),
-          })),
-
-        /* ---------------------------- Clients ---------------------------- */
-
-        saveClientForm: (clientId, values) => {
-          const s = get()
-          if (clientId === null) {
-            const id = uid('c')
-            const websiteId = uid('w')
-            const created = nowIso()
-            const client: Client = {
-              id,
-              name: values.name,
-              contactName: values.contactName ?? values.name,
-              email: values.email,
-              phone: values.phone ?? '',
-              location: values.location,
-              status: values.status ?? 'in-progress',
-              stage: values.stage ?? 'onboarded',
-              priority: values.priority,
-              assignedToId: values.assignedToId,
-              notes: values.notes,
-              activity: [
-                { id: uid('act'), date: created, title: 'Website added', description: `${values.domain} registered in the tracker` },
-                { id: uid('act'), date: created, title: 'Client onboarded', description: 'Created from the Client Tracker' },
-              ],
-              createdAt: created,
-              updatedAt: created,
-            }
-            const website: Website = {
-              id: websiteId,
-              name: values.name,
-              domain: values.domain,
-              clientId: id,
-              framework: values.framework,
-              orderingStatus: values.orderingStatus,
-              orderingStage: values.orderingStatus === 'active' ? 'Live' : values.orderingStatus === 'in-progress' ? 'Menu setup' : values.orderingStatus === 'no-need' ? 'Not required' : 'Not scheduled',
-              orderingStartDate: values.orderingStatus === 'active' || values.orderingStatus === 'in-progress' ? created : null,
-              orderingCompletedDate: values.orderingStatus === 'active' ? created : null,
-              addedAt: created,
-              updatedAt: created,
-            }
-            set((st) => ({
-              clients: [client, ...st.clients],
-              websites: [website, ...st.websites],
-              auditLogs: audit(st, 'Created Client', 'Clients', values.name, '—', 'Created'),
-            }))
-            return id
-          }
-
-          // Update existing client + its primary website
-          const client = s.clients.find((c) => c.id === clientId)
-          if (!client) return clientId
-          const primary = s.websites.find((w) => w.clientId === clientId)
-          const statusChanged = values.status && values.status !== client.status
-          set((st) => ({
-            clients: st.clients.map((c) =>
-              c.id === clientId
-                ? {
-                    ...c,
-                    name: values.name,
-                    contactName: values.contactName ?? c.contactName,
-                    email: values.email,
-                    phone: values.phone ?? c.phone,
-                    location: values.location,
-                    priority: values.priority,
-                    assignedToId: values.assignedToId,
-                    notes: values.notes,
-                    status: values.status ?? c.status,
-                    stage: values.stage ?? c.stage,
-                    updatedAt: nowIso(),
-                  }
-                : c,
+    initFirestoreSync: () => {
+      const unsubs: Array<() => void> = [
+        subscribeCollection<Client>('clients', (items) => set({ clients: items.map(normalizeClient) })),
+        subscribeCollection<Website>('websites', (items) => set({ websites: items.map(normalizeWebsite) })),
+        subscribeCollection<Migration>('migrations', (items) => set({ migrations: items.map(normalizeMigration) })),
+        subscribeCollection<PriorityItem>('priorities', (items) => set({ priorities: items.map(normalizePriority) })),
+        subscribeCollection<AuditLog>(
+          'auditLogs',
+          (items) => set({ auditLogs: items }),
+          { orderByField: 'timestamp', max: AUDIT_CAP },
+        ),
+        subscribeCollection<AppNotification>(
+          'notifications',
+          (items) => set({ notifications: items }),
+          { orderByField: 'timestamp', max: 30 },
+        ),
+        subscribeUserProfiles((profiles) =>
+          set({
+            teamMembers: profiles.map(
+              (p): TeamMember => ({
+                id: p.uid,
+                name: p.name,
+                email: p.email,
+                role: p.role,
+                title: p.title,
+                color: p.color,
+                active: p.active,
+                createdAt: p.createdAt,
+              }),
             ),
-            websites: primary
-              ? st.websites.map((w) =>
-                  w.id === primary.id
-                    ? {
-                        ...w,
-                        domain: values.domain,
-                        framework: values.framework,
-                        orderingStatus: values.orderingStatus,
-                        updatedAt: nowIso(),
-                      }
-                    : w,
-                )
-              : st.websites,
-            auditLogs: audit(
-              st,
-              'Updated Client',
-              'Clients',
-              values.name,
-              statusChanged ? CLIENT_STATUS_LABELS[client.status] : 'Edited',
-              statusChanged && values.status ? CLIENT_STATUS_LABELS[values.status] : 'Saved',
-            ),
-          }))
-          // Framework flips propagate to any open migration for the site.
-          if (primary && primary.framework !== values.framework) {
-            get().updateWebsite(primary.id, { framework: values.framework })
-          }
-          return clientId
-        },
+          }),
+        ),
+      ]
+      return () => unsubs.forEach((fn) => fn())
+    },
 
-        updateClient: (id, patch) => {
-          const before = get().clients.find((c) => c.id === id)
-          if (!before) return
-          const changedStatus = patch.status && patch.status !== before.status
-          set((st) => ({
-            clients: st.clients.map((c) => (c.id === id ? { ...c, ...patch, updatedAt: nowIso() } : c)),
-            auditLogs: audit(
-              st,
-              changedStatus ? 'Updated Client Status' : 'Updated Client',
-              'Clients',
-              before.name,
-              changedStatus ? CLIENT_STATUS_LABELS[before.status] : 'Edited',
-              changedStatus && patch.status ? CLIENT_STATUS_LABELS[patch.status] : 'Saved',
-            ),
-          }))
-        },
+    /* ---------------------------- Clients ---------------------------- */
 
-        deleteClient: (id) => get().deleteClients([id]),
+    createClient: (values) =>
+      withErrorToast(async () => {
+        const clientRef = newRef('clients')
+        const created = nowIso()
+        const clientData: DocumentData = {
+          name: values.name,
+          phone: values.phone ?? '',
+          location: values.location,
+          status: values.status ?? 'in-progress',
+          stage: values.stage ?? 'onboarded',
+          priority: values.priority,
+          notes: values.notes,
+          capabilities: { offers: 'unavailable', loyalty: 'unavailable', reservation: 'unavailable', eventOrdering: 'unavailable' },
+          createdAt: created,
+          updatedAt: created,
+        }
+        const batch = newBatch()
+        batch.set(clientRef, clientData)
+        batch.set(newSubRef('clients', clientRef.id, 'activity'), {
+          date: created,
+          title: 'Client onboarded',
+          description: 'Created from the Client Tracker',
+        })
 
-        deleteClients: (ids) => {
-          const s = get()
-          const idSet = new Set(ids)
-          const names = s.clients.filter((c) => idSet.has(c.id)).map((c) => c.name)
-          const siteIds = new Set(s.websites.filter((w) => idSet.has(w.clientId)).map((w) => w.id))
-          set((st) => ({
-            clients: st.clients.filter((c) => !idSet.has(c.id)),
-            websites: st.websites.filter((w) => !idSet.has(w.clientId)),
-            migrations: st.migrations.filter((m) => !siteIds.has(m.websiteId)),
-            priorities: st.priorities.filter((p) => !siteIds.has(p.websiteId)),
-            features: st.features.map((f) => ({
-              ...f,
-              supportedClientIds: f.supportedClientIds.filter((cid) => !idSet.has(cid)),
-            })),
-            auditLogs: audit(
-              st,
-              ids.length > 1 ? 'Bulk Deleted Clients' : 'Deleted Client',
-              'Clients',
-              ids.length > 1 ? `${ids.length} clients` : (names[0] ?? 'Client'),
-              'Existing',
-              '—',
-            ),
-          }))
-        },
-
-        duplicateClient: (id) => {
-          const s = get()
-          const src = s.clients.find((c) => c.id === id)
-          if (!src) return null
-          const primary = s.websites.find((w) => w.clientId === id)
-          const newId = uid('c')
-          const created = nowIso()
-          const copy: Client = {
-            ...structuredClone(src),
-            id: newId,
-            name: `${src.name} (Copy)`,
-            createdAt: created,
+        // Website domain is optional — no domain means no website is created yet;
+        // one can be added later from the client's Edit drawer.
+        const domain = values.domain?.trim().toLowerCase()
+        if (domain) {
+          const websiteRef = newRef('websites')
+          const websiteData: DocumentData = {
+            name: values.name,
+            domain,
+            clientId: clientRef.id,
+            framework: values.framework,
+            orderingStatus: values.orderingStatus,
+            orderingStage:
+              values.orderingStatus === 'active'
+                ? 'Live'
+                : values.orderingStatus === 'in-progress'
+                  ? 'Menu setup'
+                  : values.orderingStatus === 'no-need'
+                    ? 'Not required'
+                    : 'Not scheduled',
+            orderingStartDate: values.orderingStatus === 'active' || values.orderingStatus === 'in-progress' ? created : null,
+            orderingCompletedDate: values.orderingStatus === 'active' ? created : null,
+            environment: values.environment ?? 'Staging',
+            qaSignoff: values.qaSignoff ?? 'pending',
+            liveUrl: values.liveUrl || `https://${domain}`,
+            addedAt: created,
             updatedAt: created,
-            activity: [
-              { id: uid('act'), date: created, title: 'Client duplicated', description: `Copied from ${src.name}` },
-            ],
           }
-          const siteCopy: Website | null = primary
-            ? {
-                ...structuredClone(primary),
-                id: uid('w'),
-                clientId: newId,
-                domain: `copy-${primary.domain}`,
-                name: `${primary.name} (Copy)`,
-                addedAt: created,
-                updatedAt: created,
-              }
-            : null
-          set((st) => ({
-            clients: [copy, ...st.clients],
-            websites: siteCopy ? [siteCopy, ...st.websites] : st.websites,
-            auditLogs: audit(st, 'Duplicated Client', 'Clients', src.name, '—', copy.name),
-          }))
-          return newId
-        },
-
-        bulkUpdateClients: (ids, patch) => {
-          const idSet = new Set(ids)
-          const now = nowIso()
-          const parts: string[] = []
-          if (patch.status) parts.push(`Status → ${CLIENT_STATUS_LABELS[patch.status]}`)
-          if (patch.priority) parts.push(`Priority → ${PRIORITY_LABELS[patch.priority]}`)
-          if (patch.assignedToId !== undefined) parts.push(`Assignee → ${memberName(get().teamMembers, patch.assignedToId)}`)
-          if (patch.orderingStatus) parts.push(`Ordering → ${ORDERING_STATUS_LABELS[patch.orderingStatus]}`)
-          if (patch.framework) parts.push(`Framework → ${FRAMEWORK_LABELS[patch.framework]}`)
-          if (patch.stage) parts.push(`Stage → ${patch.stage}`)
-          set((st) => ({
-            clients: st.clients.map((c) =>
-              idSet.has(c.id)
-                ? {
-                    ...c,
-                    ...(patch.status ? { status: patch.status } : null),
-                    ...(patch.priority ? { priority: patch.priority } : null),
-                    ...(patch.assignedToId !== undefined ? { assignedToId: patch.assignedToId } : null),
-                    ...(patch.stage ? { stage: patch.stage } : null),
-                    updatedAt: now,
-                  }
-                : c,
-            ),
-            websites:
-              patch.orderingStatus || patch.framework
-                ? st.websites.map((w) =>
-                    idSet.has(w.clientId)
-                      ? {
-                          ...w,
-                          ...(patch.orderingStatus ? { orderingStatus: patch.orderingStatus } : null),
-                          ...(patch.framework ? { framework: patch.framework } : null),
-                          updatedAt: now,
-                        }
-                      : w,
-                  )
-                : st.websites,
-            migrations:
-              patch.framework === 'nextjs'
-                ? st.migrations.map((m) => {
-                    const site = st.websites.find((w) => w.id === m.websiteId)
-                    return site && idSet.has(site.clientId) && m.stage !== 'completed'
-                      ? { ...m, stage: 'completed' as MigrationStage, progress: 100, updatedAt: now }
-                      : m
-                  })
-                : st.migrations,
-            auditLogs: audit(st, 'Bulk Updated Clients', 'Clients', `${ids.length} clients`, 'Various', parts.join(', ') || 'Updated'),
-          }))
-        },
-
-        /* ---------------------------- Websites --------------------------- */
-
-        addWebsite: (input) => {
-          const id = uid('w')
-          const now = nowIso()
-          set((st) => ({
-            websites: [{ ...input, id, addedAt: now, updatedAt: now }, ...st.websites],
-            auditLogs: audit(st, 'Created Website', 'Websites', input.name, '—', 'Created'),
-          }))
-          return id
-        },
-
-        updateWebsite: (id, patch) => {
-          const before = get().websites.find((w) => w.id === id)
-          if (!before) return
-          const now = nowIso()
-          const frameworkChanged = patch.framework && patch.framework !== before.framework
-          const orderingChanged = patch.orderingStatus && patch.orderingStatus !== before.orderingStatus
-          set((st) => ({
-            websites: st.websites.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: now } : w)),
-            // Framework flip to Next.js completes any open migration; back to React reopens it.
-            migrations: frameworkChanged
-              ? st.migrations.map((m) => {
-                  if (m.websiteId !== id) return m
-                  if (patch.framework === 'nextjs' && m.stage !== 'completed') {
-                    return {
-                      ...m,
-                      stage: 'completed' as MigrationStage,
-                      progress: 100,
-                      updatedAt: now,
-                      logs: [
-                        ...m.logs,
-                        { id: uid('mlog'), timestamp: now, title: 'Marked live on Next.js', detail: 'Framework switched from the admin panel' },
-                      ],
-                    }
-                  }
-                  if (patch.framework === 'react' && m.stage === 'completed') {
-                    return { ...m, stage: 'testing' as MigrationStage, progress: 90, updatedAt: now }
-                  }
-                  return m
-                })
-              : st.migrations,
-            auditLogs: audit(
-              st,
-              frameworkChanged ? 'Updated Framework' : orderingChanged ? 'Updated Ordering Status' : 'Updated Website',
-              'Websites',
-              before.name,
-              frameworkChanged
-                ? FRAMEWORK_LABELS[before.framework]
-                : orderingChanged
-                  ? ORDERING_STATUS_LABELS[before.orderingStatus]
-                  : 'Edited',
-              frameworkChanged && patch.framework
-                ? FRAMEWORK_LABELS[patch.framework]
-                : orderingChanged && patch.orderingStatus
-                  ? ORDERING_STATUS_LABELS[patch.orderingStatus]
-                  : 'Saved',
-            ),
-          }))
-        },
-
-        deleteWebsite: (id) => {
-          const before = get().websites.find((w) => w.id === id)
-          if (!before) return
-          set((st) => ({
-            websites: st.websites.filter((w) => w.id !== id),
-            migrations: st.migrations.filter((m) => m.websiteId !== id),
-            priorities: st.priorities.filter((p) => p.websiteId !== id),
-            auditLogs: audit(st, 'Deleted Website', 'Websites', before.name, 'Existing', '—'),
-          }))
-        },
-
-        /* ---------------------------- Features --------------------------- */
-
-        addFeature: (input) => {
-          const id = uid('f')
-          const now = nowIso()
-          set((st) => ({
-            features: [{ ...input, id, createdAt: now, updatedAt: now }, ...st.features],
-            auditLogs: audit(st, 'Created Feature', 'Features', input.name, '—', 'Created'),
-          }))
-          return id
-        },
-
-        updateFeature: (id, patch) => {
-          const before = get().features.find((f) => f.id === id)
-          if (!before) return
-          const statusChanged = patch.status && patch.status !== before.status
-          set((st) => ({
-            features: st.features.map((f) => (f.id === id ? { ...f, ...patch, updatedAt: nowIso() } : f)),
-            auditLogs: audit(
-              st,
-              statusChanged ? 'Updated Deployment Status' : 'Updated Feature',
-              'Features',
-              before.name,
-              statusChanged ? before.status : 'Edited',
-              statusChanged && patch.status ? patch.status : 'Saved',
-            ),
-          }))
-        },
-
-        deleteFeature: (id) => {
-          const before = get().features.find((f) => f.id === id)
-          if (!before) return
-          set((st) => ({
-            features: st.features.filter((f) => f.id !== id),
-            auditLogs: audit(st, 'Deleted Feature', 'Features', before.name, 'Existing', '—'),
-          }))
-        },
-
-        duplicateFeature: (id) => {
-          const src = get().features.find((f) => f.id === id)
-          if (!src) return null
-          const newId = uid('f')
-          const now = nowIso()
-          set((st) => ({
-            features: [
-              { ...structuredClone(src), id: newId, name: `${src.name} (Copy)`, createdAt: now, updatedAt: now },
-              ...st.features,
-            ],
-            auditLogs: audit(st, 'Duplicated Feature', 'Features', src.name, '—', `${src.name} (Copy)`),
-          }))
-          return newId
-        },
-
-        toggleFeature: (id) => {
-          const before = get().features.find((f) => f.id === id)
-          if (!before) return
-          set((st) => ({
-            features: st.features.map((f) =>
-              f.id === id ? { ...f, enabled: !f.enabled, updatedAt: nowIso() } : f,
-            ),
-            auditLogs: audit(
-              st,
-              before.enabled ? 'Disabled Feature' : 'Enabled Feature',
-              'Features',
-              before.name,
-              before.enabled ? 'Enabled' : 'Disabled',
-              before.enabled ? 'Disabled' : 'Enabled',
-            ),
-          }))
-        },
-
-        /* --------------------------- Migrations -------------------------- */
-
-        addMigration: (input) => {
-          const id = uid('m')
-          const now = nowIso()
-          const site = get().websites.find((w) => w.id === input.websiteId)
-          set((st) => ({
-            migrations: [
-              {
-                ...input,
-                id,
-                startedAt: now,
-                updatedAt: now,
-                order: -1, // sorts to the top of its column
-                logs: [
-                  { id: uid('mlog'), timestamp: now, title: 'Migration kickoff', detail: 'Project created from the Migration board' },
-                ],
-              },
-              ...st.migrations,
-            ],
-            auditLogs: audit(st, 'Created Migration', 'Migration', site?.name ?? 'Website', '—', MIGRATION_STAGE_LABELS[input.stage]),
-          }))
-          return id
-        },
-
-        updateMigration: (id, patch) => {
-          const s = get()
-          const before = s.migrations.find((m) => m.id === id)
-          if (!before) return
-          if (patch.stage && patch.stage !== before.stage) {
-            // Stage transitions go through moveMigration so side-effects stay in one place.
-            const { stage, ...rest } = patch
-            if (Object.keys(rest).length > 0) {
-              set((st) => ({
-                migrations: st.migrations.map((m) => (m.id === id ? { ...m, ...rest, updatedAt: nowIso() } : m)),
-              }))
-            }
-            get().moveMigration(id, stage)
-            return
-          }
-          const site = s.websites.find((w) => w.id === before.websiteId)
-          const progressChanged = patch.progress !== undefined && patch.progress !== before.progress
-          set((st) => ({
-            migrations: st.migrations.map((m) => (m.id === id ? { ...m, ...patch, updatedAt: nowIso() } : m)),
-            auditLogs: audit(
-              st,
-              progressChanged ? 'Updated Progress' : 'Updated Migration',
-              'Migration',
-              site?.name ?? 'Website',
-              progressChanged ? `${before.progress}%` : 'Edited',
-              progressChanged ? `${patch.progress}%` : 'Saved',
-            ),
-          }))
-        },
-
-        moveMigration: (id, stage, order) => {
-          const s = get()
-          const before = s.migrations.find((m) => m.id === id)
-          if (!before || (before.stage === stage && order === undefined)) return
-          const site = s.websites.find((w) => w.id === before.websiteId)
-          const now = nowIso()
-          const stageChanged = before.stage !== stage
-          const progress = stageChanged
-            ? stage === 'completed'
-              ? 100
-              : stage === 'planning'
-                ? Math.min(before.progress, 15)
-                : before.stage === 'completed' && stage === 'testing'
-                  ? 90
-                  : Math.max(before.progress, STAGE_MIN_PROGRESS[stage])
-            : before.progress
-          set((st) => {
-            const targetOrder =
-              order !== undefined
-                ? order
-                : Math.min(0, ...st.migrations.filter((m) => m.stage === stage).map((m) => m.order)) - 1
-            return {
-              migrations: st.migrations.map((m) =>
-                m.id === id
-                  ? {
-                      ...m,
-                      stage,
-                      order: targetOrder,
-                      progress,
-                      updatedAt: now,
-                      logs: stageChanged
-                        ? [
-                            ...m.logs,
-                            {
-                              id: uid('mlog'),
-                              timestamp: now,
-                              title: `Moved to ${MIGRATION_STAGE_LABELS[stage]}`,
-                              detail: `Stage changed from ${MIGRATION_STAGE_LABELS[before.stage]}`,
-                            },
-                          ]
-                        : m.logs,
-                    }
-                  : m,
-              ),
-              // Completing a migration flips the website to Next.js (and vice versa).
-              websites: stageChanged
-                ? st.websites.map((w) => {
-                    if (w.id !== before.websiteId) return w
-                    if (stage === 'completed' && w.framework !== 'nextjs') return { ...w, framework: 'nextjs', updatedAt: now }
-                    if (before.stage === 'completed' && stage !== 'completed' && w.framework !== 'react')
-                      return { ...w, framework: 'react', updatedAt: now }
-                    return w
-                  })
-                : st.websites,
-              auditLogs: stageChanged
-                ? audit(
-                    st,
-                    'Updated Migration Status',
-                    'Migration',
-                    site?.name ?? 'Website',
-                    MIGRATION_STAGE_LABELS[before.stage],
-                    MIGRATION_STAGE_LABELS[stage],
-                  )
-                : st.auditLogs,
-              notifications:
-                stageChanged && stage === 'completed'
-                  ? [
-                      {
-                        id: uid('n'),
-                        title: `${site?.name ?? 'Website'} migrated to Next.js`,
-                        description: 'Migration marked completed — dashboard metrics updated.',
-                        timestamp: now,
-                        read: false,
-                        kind: 'success' as const,
-                      },
-                      ...st.notifications,
-                    ]
-                  : st.notifications,
-            }
+          batch.set(websiteRef, websiteData)
+          batch.set(newSubRef('clients', clientRef.id, 'activity'), {
+            date: created,
+            title: 'Website added',
+            description: `${domain} registered in the tracker`,
           })
-        },
+        }
 
-        appendMigrationLog: (id, title, detail) => {
-          set((st) => ({
-            migrations: st.migrations.map((m) =>
-              m.id === id
-                ? {
-                    ...m,
-                    updatedAt: nowIso(),
-                    logs: [...m.logs, { id: uid('mlog'), timestamp: nowIso(), title, detail }],
-                  }
-                : m,
-            ),
-          }))
-        },
+        await batch.commit()
+        audit('Created Client', 'Clients', values.name, '—', 'Created')
+        return clientRef.id
+      }, 'Could not create the client.'),
 
-        deleteMigrations: (ids) => {
-          const s = get()
-          const idSet = new Set(ids)
-          const names = s.migrations
-            .filter((m) => idSet.has(m.id))
-            .map((m) => s.websites.find((w) => w.id === m.websiteId)?.name ?? 'Website')
-          set((st) => ({
-            migrations: st.migrations.filter((m) => !idSet.has(m.id)),
-            auditLogs: audit(
-              st,
-              ids.length > 1 ? 'Bulk Deleted Migrations' : 'Deleted Migration',
-              'Migration',
-              ids.length > 1 ? `${ids.length} migrations` : (names[0] ?? 'Migration'),
-              'Existing',
-              '—',
-            ),
-          }))
-        },
+    updateClient: (id, patch) =>
+      withErrorToast(async () => {
+        const before = get().clients.find((c) => c.id === id)
+        if (!before) return
+        const changedStatus = patch.status && patch.status !== before.status
+        await patchDoc('clients', id, { ...patch, updatedAt: nowIso() })
+        audit(
+          changedStatus ? 'Updated Client Status' : 'Updated Client',
+          'Clients',
+          before.name,
+          changedStatus ? CLIENT_STATUS_LABELS[before.status] : 'Edited',
+          changedStatus && patch.status ? CLIENT_STATUS_LABELS[patch.status] : 'Saved',
+        )
+      }, 'Could not save the client.'),
 
-        bulkUpdateMigrations: (ids, patch) => {
+    deleteClient: (id) => get().deleteClients([id]),
+
+    deleteClients: (ids) =>
+      withErrorToast(async () => {
+        const s = get()
+        const idSet = new Set(ids)
+        const names = s.clients.filter((c) => idSet.has(c.id)).map((c) => c.name)
+        const siteIds = s.websites.filter((w) => idSet.has(w.clientId)).map((w) => w.id)
+        const siteIdSet = new Set(siteIds)
+        const migrationIds = s.migrations.filter((m) => siteIdSet.has(m.websiteId)).map((m) => m.id)
+        const priorityIds = s.priorities.filter((p) => siteIdSet.has(p.websiteId)).map((p) => p.id)
+
+        const batch = newBatch()
+        for (const id of ids) {
+          batch.delete(refAt('clients', id))
+          for (const ref of await collectSubDocRefs('clients', id, 'activity')) batch.delete(ref)
+        }
+        for (const siteId of siteIds) batch.delete(refAt('websites', siteId))
+        for (const mId of migrationIds) {
+          batch.delete(refAt('migrations', mId))
+          for (const ref of await collectSubDocRefs('migrations', mId, 'logs')) batch.delete(ref)
+        }
+        for (const pId of priorityIds) batch.delete(refAt('priorities', pId))
+        await batch.commit()
+
+        audit(
+          ids.length > 1 ? 'Bulk Deleted Clients' : 'Deleted Client',
+          'Clients',
+          ids.length > 1 ? `${ids.length} clients` : (names[0] ?? 'Client'),
+          'Existing',
+          '—',
+        )
+      }, 'Could not delete the client(s).'),
+
+    bulkUpdateClients: (ids, patch) =>
+      withErrorToast(async () => {
+        const idSet = new Set(ids)
+        const now = nowIso()
+        const parts: string[] = []
+        if (patch.status) parts.push(`Status → ${CLIENT_STATUS_LABELS[patch.status]}`)
+        if (patch.priority) parts.push(`Priority → ${PRIORITY_LABELS[patch.priority]}`)
+        if (patch.orderingStatus) parts.push(`Ordering → ${ORDERING_STATUS_LABELS[patch.orderingStatus]}`)
+        if (patch.framework) parts.push(`Framework → ${FRAMEWORK_LABELS[patch.framework]}`)
+        if (patch.stage) parts.push(`Stage → ${patch.stage}`)
+
+        const s = get()
+        const clientPatch: DocumentData = { updatedAt: now }
+        if (patch.status) clientPatch.status = patch.status
+        if (patch.priority) clientPatch.priority = patch.priority
+        if (patch.stage) clientPatch.stage = patch.stage
+
+        const batch = newBatch()
+        for (const id of ids) batch.update(refAt('clients', id), clientPatch)
+
+        if (patch.orderingStatus || patch.framework) {
+          const sitePatch: DocumentData = { updatedAt: now }
+          if (patch.orderingStatus) sitePatch.orderingStatus = patch.orderingStatus
+          if (patch.framework) sitePatch.framework = patch.framework
+          for (const site of s.websites) if (idSet.has(site.clientId)) batch.update(refAt('websites', site.id), sitePatch)
+        }
+        if (patch.framework === 'nextjs') {
+          for (const m of s.migrations) {
+            const site = s.websites.find((w) => w.id === m.websiteId)
+            if (site && idSet.has(site.clientId) && m.stage !== 'completed') {
+              batch.update(refAt('migrations', m.id), { stage: 'completed', progress: 100, updatedAt: now })
+            }
+          }
+        }
+        await batch.commit()
+        audit('Bulk Updated Clients', 'Clients', `${ids.length} clients`, 'Various', parts.join(', ') || 'Updated')
+      }, 'Could not bulk update the clients.'),
+
+    updateClientCapability: (id, capability, state) =>
+      withErrorToast(async () => {
+        const before = get().clients.find((c) => c.id === id)
+        if (!before) return
+        const previous = before.capabilities[capability]
+        await patchDoc('clients', id, { [`capabilities.${capability}`]: state, updatedAt: nowIso() })
+        audit(`Updated ${CAPABILITY_LABELS[capability]}`, 'Clients', before.name, CAPABILITY_STATE_LABELS[previous], CAPABILITY_STATE_LABELS[state])
+      }, 'Could not update the feature.'),
+
+    bulkUpdateClientCapability: (ids, capability, state) =>
+      withErrorToast(async () => {
+        const now = nowIso()
+        const batch = newBatch()
+        for (const id of ids) batch.update(refAt('clients', id), { [`capabilities.${capability}`]: state, updatedAt: now })
+        await batch.commit()
+        audit('Bulk Updated Clients', 'Clients', `${ids.length} clients`, CAPABILITY_LABELS[capability], CAPABILITY_STATE_LABELS[state])
+      }, 'Could not update the feature.'),
+
+    /* ---------------------------- Websites --------------------------- */
+
+    addWebsite: (input) =>
+      withErrorToast(async () => {
+        const now = nowIso()
+        const id = await addNewDoc('websites', { ...input, addedAt: now, updatedAt: now })
+        audit('Created Website', 'Websites', input.name, '—', 'Created')
+        return id
+      }, 'Could not create the website.'),
+
+    updateWebsite: (id, patch) =>
+      withErrorToast(async () => {
+        const before = get().websites.find((w) => w.id === id)
+        if (!before) return
+        const now = nowIso()
+        const frameworkChanged = patch.framework && patch.framework !== before.framework
+        const orderingChanged = patch.orderingStatus && patch.orderingStatus !== before.orderingStatus
+
+        await patchDoc('websites', id, { ...patch, updatedAt: now })
+
+        // Framework flip to Next.js completes any open migration; back to React reopens it.
+        if (frameworkChanged) {
+          const migration = get().migrations.find((m) => m.websiteId === id)
+          if (migration) {
+            if (patch.framework === 'nextjs' && migration.stage !== 'completed') {
+              await patchDoc('migrations', migration.id, { stage: 'completed', progress: 100, updatedAt: now })
+              await addSubDoc('migrations', migration.id, 'logs', {
+                timestamp: now,
+                title: 'Marked live on Next.js',
+                detail: 'Framework switched from the admin panel',
+              })
+            } else if (patch.framework === 'react' && migration.stage === 'completed') {
+              await patchDoc('migrations', migration.id, { stage: 'testing', progress: 90, updatedAt: now })
+            }
+          }
+        }
+
+        audit(
+          frameworkChanged ? 'Updated Framework' : orderingChanged ? 'Updated Ordering Status' : 'Updated Website',
+          'Websites',
+          before.name,
+          frameworkChanged
+            ? FRAMEWORK_LABELS[before.framework]
+            : orderingChanged
+              ? ORDERING_STATUS_LABELS[before.orderingStatus]
+              : 'Edited',
+          frameworkChanged && patch.framework
+            ? FRAMEWORK_LABELS[patch.framework]
+            : orderingChanged && patch.orderingStatus
+              ? ORDERING_STATUS_LABELS[patch.orderingStatus]
+              : 'Saved',
+        )
+      }, 'Could not save the website.'),
+
+    deleteWebsite: (id) =>
+      withErrorToast(async () => {
+        const before = get().websites.find((w) => w.id === id)
+        if (!before) return
+        const batch = newBatch()
+        batch.delete(refAt('websites', id))
+        for (const m of get().migrations.filter((m) => m.websiteId === id)) {
+          batch.delete(refAt('migrations', m.id))
+          for (const ref of await collectSubDocRefs('migrations', m.id, 'logs')) batch.delete(ref)
+        }
+        for (const p of get().priorities.filter((p) => p.websiteId === id)) batch.delete(refAt('priorities', p.id))
+        await batch.commit()
+        audit('Deleted Website', 'Websites', before.name, 'Existing', '—')
+      }, 'Could not delete the website.'),
+
+    /* --------------------------- Migrations -------------------------- */
+
+    updateMigration: (id, patch) =>
+      withErrorToast(async () => {
+        const before = get().migrations.find((m) => m.id === id)
+        if (!before) return
+        if (patch.stage && patch.stage !== before.stage) {
+          // Stage transitions go through moveMigration so side-effects stay in one place.
           const { stage, ...rest } = patch
           if (Object.keys(rest).length > 0) {
-            const now = nowIso()
-            const idSet = new Set(ids)
-            const parts: string[] = []
-            if (rest.developerId !== undefined) parts.push(`Developer → ${memberName(get().teamMembers, rest.developerId)}`)
-            if (rest.priority) parts.push(`Priority → ${PRIORITY_LABELS[rest.priority]}`)
-            set((st) => ({
-              migrations: st.migrations.map((m) => (idSet.has(m.id) ? { ...m, ...rest, updatedAt: now } : m)),
-              auditLogs: audit(st, 'Bulk Updated Migrations', 'Migration', `${ids.length} migrations`, 'Various', parts.join(', ') || 'Updated'),
-            }))
+            await patchDoc('migrations', id, { ...rest, updatedAt: nowIso() })
           }
-          if (stage) {
-            for (const id of ids) get().moveMigration(id, stage)
+          await get().moveMigration(id, stage)
+          return
+        }
+        const site = get().websites.find((w) => w.id === before.websiteId)
+        const progressChanged = patch.progress !== undefined && patch.progress !== before.progress
+        await patchDoc('migrations', id, { ...patch, updatedAt: nowIso() })
+        audit(
+          progressChanged ? 'Updated Progress' : 'Updated Migration',
+          'Migration',
+          site?.name ?? 'Website',
+          progressChanged ? `${before.progress}%` : 'Edited',
+          progressChanged ? `${patch.progress}%` : 'Saved',
+        )
+      }, 'Could not save the migration.'),
+
+    moveMigration: (id, stage, order) =>
+      withErrorToast(async () => {
+        const s = get()
+        const before = s.migrations.find((m) => m.id === id)
+        if (!before || (before.stage === stage && order === undefined)) return
+        const site = s.websites.find((w) => w.id === before.websiteId)
+        const now = nowIso()
+        const stageChanged = before.stage !== stage
+        const progress = stageChanged
+          ? stage === 'completed'
+            ? 100
+            : stage === 'planning'
+              ? Math.min(before.progress, 15)
+              : before.stage === 'completed' && stage === 'testing'
+                ? 90
+                : Math.max(before.progress, STAGE_MIN_PROGRESS[stage])
+          : before.progress
+        const targetOrder =
+          order !== undefined
+            ? order
+            : Math.min(0, ...s.migrations.filter((m) => m.stage === stage).map((m) => m.order)) - 1
+
+        await patchDoc('migrations', id, { stage, order: targetOrder, progress, updatedAt: now })
+
+        if (stageChanged) {
+          await addSubDoc('migrations', id, 'logs', {
+            timestamp: now,
+            title: `Moved to ${MIGRATION_STAGE_LABELS[stage]}`,
+            detail: `Stage changed from ${MIGRATION_STAGE_LABELS[before.stage]}`,
+          })
+          audit(
+            'Updated Migration Status',
+            'Migration',
+            site?.name ?? 'Website',
+            MIGRATION_STAGE_LABELS[before.stage],
+            MIGRATION_STAGE_LABELS[stage],
+          )
+
+          // Completing a migration flips the website to Next.js (and vice versa).
+          if (site) {
+            if (stage === 'completed' && site.framework !== 'nextjs') {
+              await patchDoc('websites', site.id, { framework: 'nextjs', updatedAt: now })
+            } else if (before.stage === 'completed' && stage !== 'completed' && site.framework !== 'react') {
+              await patchDoc('websites', site.id, { framework: 'react', updatedAt: now })
+            }
           }
-        },
 
-        /* ----------------------- Weekly priorities ----------------------- */
+          if (stage === 'completed') {
+            await addNewDoc('notifications', {
+              title: `${site?.name ?? 'Website'} migrated to Next.js`,
+              description: 'Migration marked completed — dashboard metrics updated.',
+              timestamp: now,
+              read: false,
+              kind: 'success',
+            })
+          }
+        }
+      }, 'Could not update the migration status.'),
 
-        addPriority: (input) => {
-          const id = uid('p')
-          set((st) => ({
-            priorities: [{ ...input, id }, ...st.priorities],
-            auditLogs: audit(st, 'Created Priority', 'Priorities', input.title, '—', 'Created'),
-          }))
-          return id
-        },
+    appendMigrationLog: (id, title, detail) =>
+      withErrorToast(async () => {
+        const now = nowIso()
+        await patchDoc('migrations', id, { updatedAt: now })
+        await addSubDoc('migrations', id, 'logs', { timestamp: now, title, detail })
+      }, 'Could not add the log entry.'),
 
-        updatePriority: (id, patch) => {
-          const before = get().priorities.find((p) => p.id === id)
-          if (!before) return
-          const parts: string[] = []
-          if (patch.status && patch.status !== before.status) parts.push(`Status → ${patch.status}`)
-          if (patch.priority && patch.priority !== before.priority) parts.push(`Priority → ${PRIORITY_LABELS[patch.priority]}`)
-          if (patch.assignedToId !== undefined && patch.assignedToId !== before.assignedToId)
-            parts.push(`Assignee → ${memberName(get().teamMembers, patch.assignedToId)}`)
-          if (patch.dueDate && patch.dueDate !== before.dueDate) parts.push(`Due → ${patch.dueDate}`)
-          set((st) => ({
-            priorities: st.priorities.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-            auditLogs: audit(st, 'Updated Priority', 'Priorities', before.title, 'Various', parts.join(', ') || 'Saved'),
-          }))
-        },
+    deleteMigrations: (ids) =>
+      withErrorToast(async () => {
+        const s = get()
+        const idSet = new Set(ids)
+        const names = s.migrations
+          .filter((m) => idSet.has(m.id))
+          .map((m) => s.websites.find((w) => w.id === m.websiteId)?.name ?? 'Website')
+        const batch = newBatch()
+        for (const id of ids) {
+          batch.delete(refAt('migrations', id))
+          for (const ref of await collectSubDocRefs('migrations', id, 'logs')) batch.delete(ref)
+        }
+        await batch.commit()
+        audit(
+          ids.length > 1 ? 'Bulk Deleted Migrations' : 'Deleted Migration',
+          'Migration',
+          ids.length > 1 ? `${ids.length} migrations` : (names[0] ?? 'Migration'),
+          'Existing',
+          '—',
+        )
+      }, 'Could not delete the migration(s).'),
 
-        deletePriority: (id) => {
-          const before = get().priorities.find((p) => p.id === id)
-          if (!before) return
-          set((st) => ({
-            priorities: st.priorities.filter((p) => p.id !== id),
-            auditLogs: audit(st, 'Deleted Priority', 'Priorities', before.title, 'Existing', '—'),
-          }))
-        },
-
-        /* --------------------------- Team members ------------------------ */
-
-        addTeamMember: (input) => {
-          const id = uid('tm')
-          set((st) => ({
-            teamMembers: [...st.teamMembers, { ...input, id, createdAt: nowIso() }],
-            auditLogs: audit(st, 'Created Team Member', 'Team', input.name, '—', ROLE_LABELS[input.role]),
-          }))
-          return id
-        },
-
-        updateTeamMember: (id, patch) => {
-          const before = get().teamMembers.find((m) => m.id === id)
-          if (!before) return
-          const roleChanged = patch.role && patch.role !== before.role
-          set((st) => ({
-            teamMembers: st.teamMembers.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-            auditLogs: audit(
-              st,
-              roleChanged ? 'Updated Role' : 'Updated Team Member',
-              'Team',
-              before.name,
-              roleChanged ? ROLE_LABELS[before.role] : 'Edited',
-              roleChanged && patch.role ? ROLE_LABELS[patch.role] : 'Saved',
-            ),
-          }))
-        },
-
-        deleteTeamMember: (id) => {
-          const before = get().teamMembers.find((m) => m.id === id)
-          if (!before || id === get().currentUserId) return
-          set((st) => ({
-            teamMembers: st.teamMembers.filter((m) => m.id !== id),
-            clients: st.clients.map((c) => (c.assignedToId === id ? { ...c, assignedToId: null } : c)),
-            migrations: st.migrations.map((m) => (m.developerId === id ? { ...m, developerId: null } : m)),
-            priorities: st.priorities.map((p) => (p.assignedToId === id ? { ...p, assignedToId: null } : p)),
-            auditLogs: audit(st, 'Deleted Team Member', 'Team', before.name, ROLE_LABELS[before.role], '—'),
-          }))
-        },
-
-        /* --------------------------- Notifications ----------------------- */
-
-        addNotification: (n) =>
-          set((st) => ({
-            notifications: [{ ...n, id: uid('n'), timestamp: nowIso(), read: false }, ...st.notifications].slice(0, 30),
-          })),
-
-        markNotificationRead: (id) =>
-          set((st) => ({
-            notifications: st.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-          })),
-
-        markAllNotificationsRead: () =>
-          set((st) => ({ notifications: st.notifications.map((n) => ({ ...n, read: true })) })),
-
-        /* ------------------------------ System ---------------------------- */
-
-        resetAll: () => {
-          const fresh = buildSeedState()
-          set((st) => ({
-            ...fresh,
-            auditLogs: [
-              makeAudit(
-                st.teamMembers.find((m) => m.id === st.currentUserId)?.name ?? 'Admin',
-                'Reset Demo Data',
-                'System',
-                'All records',
-                'Modified',
-                'Seed data',
-              ),
-              ...fresh.auditLogs,
-            ],
-          }))
-        },
-
-        tickRealtime: () => {
-          const s = get()
-          const candidates = s.migrations.filter((m) => m.stage === 'in-progress' && m.progress < 94)
-          if (candidates.length === 0) return null
-          const target = candidates[Math.floor(Math.random() * candidates.length)]!
-          const site = s.websites.find((w) => w.id === target.websiteId)
-          const bump = 1 + Math.floor(Math.random() * 3)
-          const next = clamp(target.progress + bump, 0, 94)
-          const addLog = Math.random() < 0.35
-          const logEntry = REALTIME_LOGS[Math.floor(Math.random() * REALTIME_LOGS.length)]!
+    bulkUpdateMigrations: (ids, patch) =>
+      withErrorToast(async () => {
+        const { stage, ...rest } = patch
+        if (Object.keys(rest).length > 0) {
           const now = nowIso()
-          const message = `${site?.name ?? 'A migration'} progressed to ${next}%`
-          set((st) => ({
-            migrations: st.migrations.map((m) =>
-              m.id === target.id
-                ? {
-                    ...m,
-                    progress: next,
-                    updatedAt: now,
-                    logs: addLog
-                      ? [...m.logs, { id: uid('mlog'), timestamp: now, title: logEntry[0], detail: logEntry[1] }]
-                      : m.logs,
-                  }
-                : m,
-            ),
-            lastRealtimeEvent: { id: uid('rt'), message, migrationId: target.id, at: Date.now() },
-            notifications:
-              next >= 90 && target.progress < 90
-                ? [
-                    {
-                      id: uid('n'),
-                      title: `${site?.name ?? 'Migration'} nearing completion`,
-                      description: `Migration progress reached ${next}% — ready for QA soon.`,
-                      timestamp: now,
-                      read: false,
-                      kind: 'info' as const,
-                    },
-                    ...st.notifications,
-                  ].slice(0, 30)
-                : st.notifications,
-          }))
-          return message
-        },
-      }
-    },
-    {
-      name: 'eot-data',
-      version: 3,
-      migrate: () => ({ ...buildSeedState() }) as unknown as AppState,
-      partialize: (state) =>
-        ({
-          clients: state.clients,
-          websites: state.websites,
-          features: state.features,
-          migrations: state.migrations,
-          priorities: state.priorities,
-          teamMembers: state.teamMembers,
-          auditLogs: state.auditLogs,
-          notifications: state.notifications,
-          baseline: state.baseline,
-          currentUserId: state.currentUserId,
-          actingRole: state.actingRole,
-        }) as AppState,
-    },
-  ),
-)
+          const parts: string[] = []
+          if (rest.developerId !== undefined) parts.push(`Developer → ${memberName(get().teamMembers, rest.developerId)}`)
+          if (rest.priority) parts.push(`Priority → ${PRIORITY_LABELS[rest.priority]}`)
+          const batch = newBatch()
+          for (const id of ids) batch.update(refAt('migrations', id), { ...rest, updatedAt: now })
+          await batch.commit()
+          audit('Bulk Updated Migrations', 'Migration', `${ids.length} migrations`, 'Various', parts.join(', ') || 'Updated')
+        }
+        if (stage) {
+          for (const id of ids) await get().moveMigration(id, stage)
+        }
+      }, 'Could not bulk update the migrations.'),
+
+    /* ----------------------- Weekly priorities ----------------------- */
+
+    addPriority: (input) =>
+      withErrorToast(async () => {
+        const id = await addNewDoc('priorities', input)
+        audit('Created Priority', 'Priorities', input.title, '—', 'Created')
+        return id
+      }, 'Could not create the priority.'),
+
+    updatePriority: (id, patch) =>
+      withErrorToast(async () => {
+        const before = get().priorities.find((p) => p.id === id)
+        if (!before) return
+        const parts: string[] = []
+        if (patch.status && patch.status !== before.status) parts.push(`Status → ${patch.status}`)
+        if (patch.priority && patch.priority !== before.priority) parts.push(`Priority → ${PRIORITY_LABELS[patch.priority]}`)
+        if (patch.assignedToId !== undefined && patch.assignedToId !== before.assignedToId)
+          parts.push(`Assignee → ${memberName(get().teamMembers, patch.assignedToId)}`)
+        if (patch.dueDate && patch.dueDate !== before.dueDate) parts.push(`Due → ${patch.dueDate}`)
+        await patchDoc('priorities', id, patch)
+        audit('Updated Priority', 'Priorities', before.title, 'Various', parts.join(', ') || 'Saved')
+      }, 'Could not save the priority.'),
+
+    deletePriority: (id) =>
+      withErrorToast(async () => {
+        const before = get().priorities.find((p) => p.id === id)
+        if (!before) return
+        await removeDoc('priorities', id)
+        audit('Deleted Priority', 'Priorities', before.title, 'Existing', '—')
+      }, 'Could not delete the priority.'),
+
+    /* --------------------------- Notifications ----------------------- */
+
+    addNotification: (n) =>
+      withErrorToast(async () => {
+        await addNewDoc('notifications', { ...n, timestamp: nowIso(), read: false })
+      }, 'Could not add the notification.'),
+
+    markNotificationRead: (id) =>
+      withErrorToast(async () => {
+        await patchDoc('notifications', id, { read: true })
+      }, 'Could not update the notification.'),
+
+    markAllNotificationsRead: () =>
+      withErrorToast(async () => {
+        const unread = get().notifications.filter((n) => !n.read)
+        if (unread.length === 0) return
+        const batch = newBatch()
+        for (const n of unread) batch.update(refAt('notifications', n.id), { read: true })
+        await batch.commit()
+      }, 'Could not update notifications.'),
+  }
+})

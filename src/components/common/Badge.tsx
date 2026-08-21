@@ -11,15 +11,22 @@ export type BadgeTone =
   | 'indigo'
   | 'ink'
 
+/**
+ * The palette is deliberately restrained to red (brand/primary), emerald
+ * (success), amber (warning) and slate (neutral). `indigo`, `sky` and
+ * `violet` are kept as tone names so existing call sites don't need to
+ * change meaning, but they render as slate — this is what keeps categorical
+ * tags (module/category labels) from reintroducing blue/purple accents.
+ */
 export const badgeToneClasses: Record<BadgeTone, string> = {
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20',
   amber: 'bg-amber-50 text-amber-700 ring-amber-600/25 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/20',
   red: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-400/20',
   rose: 'bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-400 dark:ring-rose-400/20',
-  sky: 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-400/20',
-  violet: 'bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-400/20',
+  sky: 'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-400/20',
+  violet: 'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-400/20',
   slate: 'bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400 dark:ring-slate-400/20',
-  indigo: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-400/20',
+  indigo: 'bg-primary-50 text-primary-700 ring-primary-600/20 dark:bg-primary-500/10 dark:text-primary-400 dark:ring-primary-400/20',
   ink: 'bg-slate-900 text-white ring-slate-900/10 dark:bg-slate-100 dark:text-slate-900 dark:ring-white/20',
 }
 
@@ -28,10 +35,10 @@ export const badgeDotClasses: Record<BadgeTone, string> = {
   amber: 'bg-amber-500',
   red: 'bg-red-500',
   rose: 'bg-rose-500',
-  sky: 'bg-sky-500',
-  violet: 'bg-violet-500',
+  sky: 'bg-slate-400',
+  violet: 'bg-slate-400',
   slate: 'bg-slate-400',
-  indigo: 'bg-indigo-500',
+  indigo: 'bg-primary-500',
   ink: 'bg-current',
 }
 

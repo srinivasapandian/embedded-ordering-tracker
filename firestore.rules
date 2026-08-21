@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// Mirrors the ROLE_PERMISSIONS matrix in src/types/index.ts, so server-side
+// enforcement matches what the UI already gates on `can(permission)`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function hasAnyRole(roles) {
+      return isSignedIn() && myRole() in roles;
+    }
+
+    // Permission -> role sets, taken directly from ROLE_PERMISSIONS.
+    function canCreateClient() { return hasAnyRole(['super-admin', 'admin', 'manager']); }
+    function canEditClient()   { return hasAnyRole(['super-admin', 'admin', 'manager', 'developer']); }
+    function canDeleteClient() { return hasAnyRole(['super-admin', 'admin']); }
+    function canManageMigration() { return hasAnyRole(['super-admin', 'admin', 'manager', 'developer']); }
+    function canManageUsers()  { return hasAnyRole(['super-admin', 'admin']); }
+
+    // users/{uid} — Firebase Auth UID keyed profile + role.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      // Self-provisioning bootstrap: a signed-in user may create their OWN
+      // profile doc (AuthContext does this automatically on first login),
+      // always as the lowest-privilege role — see ensureUserProfile().
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'viewer';
+      // You may edit your own non-role fields, or a super-admin/admin may
+      // edit anyone (including granting roles).
+      allow update: if isSignedIn() && (
+        (request.auth.uid == uid && request.resource.data.role == resource.data.role) ||
+        canManageUsers()
+      );
+      allow delete: if canManageUsers();
+    }
+
+    // clients/{clientId} — Client Tracker, Feature Enablement (capabilities
+    // field), and the client side of Migration all live on this doc.
+    match /clients/{clientId} {
+      allow read: if isSignedIn();
+      allow create: if canCreateClient();
+      allow update: if canEditClient();
+      allow delete: if canDeleteClient();
+
+      match /activity/{activityId} {
+        allow read: if isSignedIn();
+        allow create: if canEditClient();
+        allow update, delete: if canDeleteClient();
+      }
+    }
+
+    // websites/{websiteId} — technology stack, environment, ordering, QA.
+    match /websites/{websiteId} {
+      allow read: if isSignedIn();
+      allow create: if canCreateClient();
+      allow update: if canEditClient();
+      allow delete: if canDeleteClient();
+    }
+
+    // migrations/{migrationId}
+    match /migrations/{migrationId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if canManageMigration();
+
+      match /logs/{logId} {
+        allow read: if isSignedIn();
+        allow create: if canManageMigration();
+        allow update, delete: if canDeleteClient();
+      }
+    }
+
+    // priorities/{id} — weekly priority board items.
+    match /priorities/{id} {
+      allow read: if isSignedIn();
+      allow write: if canEditClient();
+    }
+
+    // auditLogs/{id} — append-only trail written alongside every mutation above.
+    match /auditLogs/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // notifications/{id} — shared team feed.
+    match /notifications/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

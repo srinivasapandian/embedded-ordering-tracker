@@ -9,7 +9,7 @@ const kindConfig: Record<ToastKind, { Icon: typeof Info; classes: string }> = {
   success: { Icon: CheckCircle2, classes: 'text-emerald-500' },
   error: { Icon: XCircle, classes: 'text-red-500' },
   warning: { Icon: AlertTriangle, classes: 'text-amber-500' },
-  info: { Icon: Info, classes: 'text-sky-500' },
+  info: { Icon: Info, classes: 'text-slate-400' },
 }
 
 function Toast({ toast }: { toast: ToastItem }) {

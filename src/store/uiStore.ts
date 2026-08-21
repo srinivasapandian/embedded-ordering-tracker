@@ -6,6 +6,9 @@ interface UiState {
   toggleSidebar: () => void
   commandPaletteOpen: boolean
   setCommandPaletteOpen: (open: boolean) => void
+  /** Off-canvas sidebar drawer on small screens (< lg breakpoint). */
+  mobileNavOpen: boolean
+  setMobileNavOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>()(
@@ -15,6 +18,8 @@ export const useUiStore = create<UiState>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       commandPaletteOpen: false,
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      mobileNavOpen: false,
+      setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
     }),
     {
       name: 'eot-ui',

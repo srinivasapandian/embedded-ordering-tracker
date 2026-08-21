@@ -1,10 +1,16 @@
-import type { TeamMember } from '@/types'
 import { initials } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import { Tooltip } from './Tooltip'
 
+/** Structural shape — satisfied by both `TeamMember` and the Firebase-backed `UserProfile`. */
+interface AvatarMember {
+  name: string
+  color: string
+  title?: string
+}
+
 interface UserAvatarProps {
-  member?: TeamMember | null
+  member?: AvatarMember | null
   size?: 'xs' | 'sm' | 'md' | 'lg'
   /** Render the name (and optionally title) next to the avatar. */
   showName?: boolean

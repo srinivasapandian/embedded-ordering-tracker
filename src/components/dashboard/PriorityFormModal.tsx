@@ -96,7 +96,7 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
     )
   }, [open, editing, weekStart, reset])
 
-  const onSubmit = (values: PriorityFormValues) => {
+  const onSubmit = async (values: PriorityFormValues) => {
     const payload = {
       title: values.title.trim(),
       websiteId: values.websiteId,
@@ -105,14 +105,18 @@ export function PriorityFormModal({ open, onClose, editing, weekStart }: Priorit
       dueDate: values.dueDate,
       status: values.status,
     }
-    if (editing) {
-      updatePriority(editing.id, payload)
-      toast.success('Priority updated', `"${payload.title}" has been saved.`)
-    } else {
-      addPriority({ ...payload, weekStart })
-      toast.success('Priority added', `Scheduled for ${weekLabel(weekStart)}.`)
+    try {
+      if (editing) {
+        await updatePriority(editing.id, payload)
+        toast.success('Priority updated', `"${payload.title}" has been saved.`)
+      } else {
+        await addPriority({ ...payload, weekStart })
+        toast.success('Priority added', `Scheduled for ${weekLabel(weekStart)}.`)
+      }
+      onClose()
+    } catch {
+      // withErrorToast in the store already surfaced the failure — keep the modal open so the user can retry.
     }
-    onClose()
   }
 
   return (

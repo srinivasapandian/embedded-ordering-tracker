@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useUiStore } from '@/store/uiStore'
 import { useHotkey } from '@/hooks/useHotkey'
-import { useMockRealtime } from '@/hooks/useMockRealtime'
+import { useFirestoreSync } from '@/hooks/useFirestoreSync'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { Skeleton } from '@/components/common/Skeleton'
 import { Toaster } from '@/components/common/Toaster'
@@ -40,8 +40,8 @@ export function AppLayout() {
     { ctrlOrCmd: true, allowInInputs: true },
   )
 
-  // Simulated realtime updates for the whole app.
-  useMockRealtime()
+  // Live Firestore sync for the whole app.
+  useFirestoreSync()
 
   return (
     <div className="flex min-h-screen bg-canvas">
