@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, CalendarClock, GitBranch, Globe, LayoutDashboard, Sparkles, Users } from 'lucide-react'
+import { ArrowUpRight, CalendarClock, GitBranch, Globe, LayoutDashboard, Presentation, Sparkles, Users } from 'lucide-react'
 import { ClientsManager } from '@/components/admin/ClientsManager'
 import { FeaturesManager } from '@/components/admin/FeaturesManager'
 import { MigrationsManager } from '@/components/admin/MigrationsManager'
@@ -10,8 +10,10 @@ import { EmbeddedOrderingRollout } from '@/components/dashboard/EmbeddedOrdering
 import { KpiStrip } from '@/components/dashboard/KpiStrip'
 import { MigrationOverview } from '@/components/dashboard/MigrationOverview'
 import { TechLandscape } from '@/components/dashboard/TechLandscape'
+import { PresentMode } from '@/components/present/PresentMode'
 import { Tabs } from '@/components/common/Tabs'
 import { PageHeader } from '@/components/common/PageHeader'
+import { Button } from '@/components/common/Button'
 import { useAppStore } from '@/store/appStore'
 
 function DashboardTab() {
@@ -50,13 +52,21 @@ export default function AdminPanel() {
   const migrations = useAppStore((s) => s.migrations)
   const priorities = useAppStore((s) => s.priorities)
   const [activeTab, setActiveTab] = useState('clients')
+  const [presenting, setPresenting] = useState(false)
 
   return (
     <>
       <PageHeader
         title="Admin Panel"
         description="The only place client, feature, migration and priority records get created or edited — every other page (Dashboard, Client Tracker, Features, Migration) is a read-only view of this same data."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setPresenting(true)}>
+            <Presentation className="h-3.5 w-3.5" aria-hidden />
+            Present
+          </Button>
+        }
       />
+      <PresentMode open={presenting} onClose={() => setPresenting(false)} />
       <Tabs
         active={activeTab}
         onChange={setActiveTab}

@@ -35,6 +35,10 @@ const STATUS_CONFIG: Record<AnyStatus, { label: string; tone: BadgeTone }> = {
   planned: { label: 'Planned', tone: 'sky' },
   react: { label: 'React', tone: 'sky' },
   nextjs: { label: 'Next.js', tone: 'ink' },
+  html: { label: 'HTML', tone: 'slate' },
+  shopify: { label: 'Shopify', tone: 'emerald' },
+  wordpress: { label: 'WordPress', tone: 'violet' },
+  unknown: { label: 'Unknown', tone: 'slate' },
 }
 
 interface StatusBadgeProps {

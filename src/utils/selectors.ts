@@ -7,6 +7,7 @@ import type {
   TeamMember,
   Website,
 } from '@/types'
+import { MIGRATABLE_FRAMEWORKS } from '@/types'
 
 /* Pure derivation helpers shared by every module. Call inside useMemo. */
 
@@ -39,8 +40,12 @@ export interface MigrationMetrics {
 }
 
 export function migrationMetrics(websites: Website[], migrations: Migration[]): MigrationMetrics {
-  const nextjs = websites.filter((w) => w.framework === 'nextjs').length
-  const react = websites.length - nextjs
+  // Only sites actually in scope for the React → Next.js pipeline count toward
+  // the migration percentage — a WordPress/Shopify/HTML site was never going
+  // to become Next.js, so including it would understate real progress.
+  const inScope = websites.filter((w) => MIGRATABLE_FRAMEWORKS.includes(w.framework) || migrations.some((m) => m.websiteId === w.id))
+  const nextjs = inScope.filter((w) => w.framework === 'nextjs').length
+  const react = inScope.length - nextjs
   const byStage: Record<MigrationStage, number> = {
     planning: 0,
     'in-progress': 0,
@@ -49,10 +54,10 @@ export function migrationMetrics(websites: Website[], migrations: Migration[]): 
   }
   for (const m of migrations) byStage[m.stage] += 1
   return {
-    totalWebsites: websites.length,
+    totalWebsites: inScope.length,
     nextjs,
     react,
-    completionPct: websites.length ? (nextjs / websites.length) * 100 : 0,
+    completionPct: inScope.length ? (nextjs / inScope.length) * 100 : 0,
     byStage,
     totalMigrations: migrations.length,
   }

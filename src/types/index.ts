@@ -3,7 +3,7 @@
 /* ------------------------------------------------------------------ */
 
 export type OrderingStatus = 'active' | 'in-progress' | 'no-need' | 'not-started'
-export type Framework = 'react' | 'nextjs'
+export type Framework = 'react' | 'nextjs' | 'html' | 'shopify' | 'wordpress' | 'unknown'
 export type MigrationStage = 'planning' | 'in-progress' | 'testing' | 'completed'
 export type Priority = 'high' | 'medium' | 'low'
 export type ClientStatus = 'active' | 'in-progress' | 'completed' | 'blocked'
@@ -254,7 +254,14 @@ export const ORDERING_STATUS_LABELS: Record<OrderingStatus, string> = {
 export const FRAMEWORK_LABELS: Record<Framework, string> = {
   react: 'React',
   nextjs: 'Next.js',
+  html: 'HTML',
+  shopify: 'Shopify',
+  wordpress: 'WordPress',
+  unknown: 'Unknown',
 }
+
+/** Frameworks in scope for the React → Next.js migration pipeline (everything else is tracked but not migrated). */
+export const MIGRATABLE_FRAMEWORKS: Framework[] = ['react', 'nextjs']
 
 export const MIGRATION_STAGE_LABELS: Record<MigrationStage, string> = {
   planning: 'Planning',

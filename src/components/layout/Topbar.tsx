@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Menu, Moon, Search, Settings, Sun, User } from 'lucide-react'
+import { LogOut, Menu, Moon, Search, Settings, Sun } from 'lucide-react'
 import { useUiStore } from '@/store/uiStore'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
@@ -88,12 +88,6 @@ export function Topbar() {
           groups={[
             {
               items: [
-                {
-                  key: 'profile',
-                  label: 'Your profile',
-                  icon: User,
-                  onSelect: () => navigate('/admin?tab=team'),
-                },
                 {
                   key: 'settings',
                   label: 'Settings',

@@ -63,6 +63,12 @@ export interface ClientFormValues {
   environment?: Environment
   qaSignoff?: QaSignoff
   liveUrl?: string
+  orderingStage?: string
+  capabilities?: ClientCapabilities
+  /** Optional migration record to create alongside the website — omit to leave migration untracked. */
+  migrationStage?: MigrationStage
+  migrationQuarter?: string
+  targetStack?: Framework
 }
 
 export interface BulkClientPatch {
@@ -113,6 +119,7 @@ interface AppState {
   deleteWebsite: (id: string) => Promise<void>
 
   /* Migrations */
+  addMigration: (input: Omit<Migration, 'id' | 'order' | 'startedAt' | 'updatedAt'>) => Promise<string>
   updateMigration: (id: string, patch: Partial<Migration>) => Promise<void>
   moveMigration: (id: string, stage: MigrationStage, order?: number) => Promise<void>
   appendMigrationLog: (id: string, title: string, detail: string) => Promise<void>
@@ -351,7 +358,7 @@ export const useAppStore = create<AppState>()((set, get) => {
           stage: values.stage ?? 'onboarded',
           priority: values.priority,
           notes: values.notes,
-          capabilities: { offers: 'unavailable', loyalty: 'unavailable', reservation: 'unavailable', eventOrdering: 'unavailable' },
+          capabilities: values.capabilities ?? DEFAULT_CAPABILITIES,
           createdAt: created,
           updatedAt: created,
         }
@@ -375,13 +382,14 @@ export const useAppStore = create<AppState>()((set, get) => {
             framework: values.framework,
             orderingStatus: values.orderingStatus,
             orderingStage:
-              values.orderingStatus === 'active'
+              values.orderingStage ||
+              (values.orderingStatus === 'active'
                 ? 'Live'
                 : values.orderingStatus === 'in-progress'
                   ? 'Menu setup'
                   : values.orderingStatus === 'no-need'
                     ? 'Not required'
-                    : 'Not scheduled',
+                    : 'Not scheduled'),
             orderingStartDate: values.orderingStatus === 'active' || values.orderingStatus === 'in-progress' ? created : null,
             orderingCompletedDate: values.orderingStatus === 'active' ? created : null,
             environment: values.environment ?? 'Staging',
@@ -396,6 +404,23 @@ export const useAppStore = create<AppState>()((set, get) => {
             title: 'Website added',
             description: `${domain} registered in the tracker`,
           })
+
+          if (values.migrationStage) {
+            const migrationRef = newRef('migrations')
+            batch.set(migrationRef, {
+              websiteId: websiteRef.id,
+              developerId: null,
+              stage: values.migrationStage,
+              progress: values.migrationStage === 'completed' ? 100 : STAGE_MIN_PROGRESS[values.migrationStage],
+              priority: values.priority,
+              dueDate: created.slice(0, 10),
+              order: 0,
+              quarter: values.migrationQuarter || '',
+              targetStack: values.targetStack ?? 'nextjs',
+              startedAt: created,
+              updatedAt: created,
+            })
+          }
         }
 
         await batch.commit()
@@ -578,6 +603,16 @@ export const useAppStore = create<AppState>()((set, get) => {
       }, 'Could not delete the website.'),
 
     /* --------------------------- Migrations -------------------------- */
+
+    addMigration: (input) =>
+      withErrorToast(async () => {
+        const now = nowIso()
+        const order = Math.min(0, ...get().migrations.filter((m) => m.stage === input.stage).map((m) => m.order)) - 1
+        const id = await addNewDoc('migrations', { ...input, order, startedAt: now, updatedAt: now })
+        const site = get().websites.find((w) => w.id === input.websiteId)
+        audit('Created Migration', 'Migration', site?.name ?? 'Website', '—', 'Created')
+        return id
+      }, 'Could not create the migration.'),
 
     updateMigration: (id, patch) =>
       withErrorToast(async () => {

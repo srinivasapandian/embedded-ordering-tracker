@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { ColumnDef } from '@tanstack/react-table'
-import { ChevronDown, Eye, Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { ChevronDown, Eye, Pencil, Plus, Trash2, Upload, Users } from 'lucide-react'
 import type { CapabilityState, Client, ClientStatus, Environment, OrderingStatus, Priority, QaSignoff } from '@/types'
 import {
   CAPABILITY_LABELS,
@@ -21,7 +21,7 @@ import {
   QA_SIGNOFF_ORDERED,
   quarterOptions,
 } from '@/types'
-import { useAppStore, type ClientFormValues } from '@/store/appStore'
+import { useAppStore } from '@/store/appStore'
 import { toast } from '@/store/toastStore'
 import { useSimulatedLoad } from '@/hooks/useSimulatedLoad'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -37,7 +37,6 @@ import { DropdownMenu, type MenuItem } from '@/components/common/DropdownMenu'
 import { FilterDropdown } from '@/components/common/FilterDropdown'
 import { FormField } from '@/components/common/FormField'
 import { Input, Textarea } from '@/components/common/Input'
-import { Modal } from '@/components/common/Modal'
 import { PriorityBadge } from '@/components/common/PriorityBadge'
 import { SearchInput } from '@/components/common/SearchInput'
 import { Select } from '@/components/common/Select'
@@ -47,6 +46,7 @@ import { ColumnToggleMenu, SortableHeader } from '@/components/common/table'
 import { Tooltip } from '@/components/common/Tooltip'
 import { ClientExpansionPanel } from '@/components/clients/ClientExpansionPanel'
 import { buildClientRows } from '@/components/clients/clientRows'
+import { ImportClientsModal } from './ImportClientsModal'
 import {
   AdminDataTable,
   AdminToolbar,
@@ -79,7 +79,9 @@ const STATUS_VALUES = ['active', 'in-progress', 'completed', 'blocked'] as const
 const STAGE_VALUES = ['onboarded', 'requirements', 'ordering', 'migration', 'qa', 'completed'] as const
 const PRIORITY_VALUES = ['high', 'medium', 'low'] as const
 const ORDERING_VALUES = ['active', 'in-progress', 'no-need', 'not-started'] as const
-const FRAMEWORK_VALUES = ['react', 'nextjs'] as const
+const FRAMEWORK_VALUES = ['react', 'nextjs', 'html', 'shopify', 'wordpress', 'unknown'] as const
+/** Migration "Target stack" only ever moves within the React → Next.js pipeline. */
+const MIGRATION_TARGET_VALUES = ['react', 'nextjs'] as const
 
 const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i
 
@@ -122,6 +124,7 @@ export function ClientsManager({
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [priorityFilter, setPriorityFilter] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [editing, setEditing] = useState<Client | null>(null)
   const [viewing, setViewing] = useState<Client | null>(null)
   const [deleting, setDeleting] = useState<Client | null>(null)
@@ -411,6 +414,12 @@ export function ClientsManager({
         <div className="ml-auto flex items-center gap-2">
           <ColumnToggleMenu table={table} />
           <DisabledHint when={!canCreate} reason={denyReason}>
+            <Button size="sm" variant="outline" disabled={!canCreate} onClick={() => setImporting(true)}>
+              <Upload className="h-3.5 w-3.5" aria-hidden />
+              Import
+            </Button>
+          </DisabledHint>
+          <DisabledHint when={!canCreate} reason={denyReason}>
             <Button size="sm" variant="primary" disabled={!canCreate} onClick={() => setAdding(true)}>
               <Plus className="h-3.5 w-3.5" aria-hidden />
               Add Client
@@ -474,8 +483,16 @@ export function ClientsManager({
         }
       />
 
-      {adding && <ClientAddModal onClose={() => setAdding(false)} />}
-      {editing && <ClientEditDrawer client={editing} onClose={() => setEditing(null)} />}
+      {(adding || editing) && (
+        <ClientFormDrawer
+          client={editing}
+          onClose={() => {
+            setAdding(false)
+            setEditing(null)
+          }}
+        />
+      )}
+      {importing && <ImportClientsModal onClose={() => setImporting(false)} />}
 
       <Drawer
         open={viewing !== null}
@@ -530,7 +547,9 @@ export function ClientsManager({
 }
 
 /* ------------------------------------------------------------------ */
-/* Edit modal (compact RHF + zod)                                      */
+/* Unified onboarding form — one form for add AND edit that captures   */
+/* client info, technology/environment, ordering & QA, migration and   */
+/* feature enablement in a single save, populating every admin tab.    */
 /* ------------------------------------------------------------------ */
 
 const MIGRATION_STAGE_VALUES = ['planning', 'in-progress', 'testing', 'completed'] as const
@@ -538,18 +557,18 @@ const QA_VALUES = ['signed-off', 'pending', 'not-required'] as const
 const ENV_VALUES = ['Production', 'Staging', 'QA'] as const
 const CAPABILITY_STATE_VALUES = ['enabled', 'in-progress', 'unavailable'] as const
 
-function sectionEditSchema(websites: { domain: string }[], currentDomain: string | undefined) {
+function clientFormSchema(websites: { domain: string }[], currentDomain: string | undefined) {
   const domains = new Set(websites.map((w) => w.domain.toLowerCase()).filter((d) => d !== currentDomain?.toLowerCase()))
   return z.object({
     // Client information
     name: z.string().min(2, 'Name must be at least 2 characters'),
-    phone: z.string().min(7, 'Enter a valid phone number'),
+    phone: z.string().optional(),
     location: z.string().min(2, 'Location is required'),
     notes: z.string(),
     status: z.enum(STATUS_VALUES),
     stage: z.enum(STAGE_VALUES),
     priority: z.enum(PRIORITY_VALUES),
-    // Site & technology (optional — a client may have no primary website)
+    // Site & technology (optional — a client may have no primary website yet)
     domain: z
       .string()
       .regex(DOMAIN_RE, 'Enter a valid domain, e.g. restaurant.com')
@@ -557,15 +576,15 @@ function sectionEditSchema(websites: { domain: string }[], currentDomain: string
       .optional()
       .or(z.literal('')),
     liveUrl: z.string().optional().or(z.literal('')),
-    framework: z.enum(FRAMEWORK_VALUES).optional(),
-    environment: z.enum(ENV_VALUES).optional(),
-    orderingStatus: z.enum(ORDERING_VALUES).optional(),
+    framework: z.enum(FRAMEWORK_VALUES),
+    environment: z.enum(ENV_VALUES),
+    orderingStatus: z.enum(ORDERING_VALUES),
     orderingStage: z.string().optional(),
-    qaSignoff: z.enum(QA_VALUES).optional(),
-    // Migration (optional — not every site has an active migration record)
-    migrationStage: z.enum(MIGRATION_STAGE_VALUES).optional(),
+    qaSignoff: z.enum(QA_VALUES),
+    // Migration (optional — only tracked once a website exists)
+    migrationStage: z.union([z.enum(MIGRATION_STAGE_VALUES), z.literal('')]),
     migrationQuarter: z.string().optional(),
-    targetStack: z.enum(FRAMEWORK_VALUES).optional(),
+    targetStack: z.enum(MIGRATION_TARGET_VALUES),
     // Feature enablement
     offers: z.enum(CAPABILITY_STATE_VALUES),
     loyalty: z.enum(CAPABILITY_STATE_VALUES),
@@ -574,7 +593,7 @@ function sectionEditSchema(websites: { domain: string }[], currentDomain: string
   })
 }
 
-type EditValues = z.infer<ReturnType<typeof sectionEditSchema>>
+type ClientFormValuesShape = z.infer<ReturnType<typeof clientFormSchema>>
 
 function DrawerSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -585,72 +604,43 @@ function DrawerSection({ title, children }: { title: string; children: React.Rea
   )
 }
 
-/** Full-lifecycle edit drawer: client info, site/technology, ordering & QA, migration and feature enablement. */
-function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => void }) {
+/**
+ * Single onboarding form used for both creating and editing a client. Every
+ * field the Client Tracker, Features and Migration tabs display lives here —
+ * those tabs are read-only views of what gets saved from this drawer.
+ */
+function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose: () => void }) {
+  const isEdit = client !== null
   const websites = useAppStore((s) => s.websites)
   const migrations = useAppStore((s) => s.migrations)
+  const createClient = useAppStore((s) => s.createClient)
   const updateClient = useAppStore((s) => s.updateClient)
   const updateWebsite = useAppStore((s) => s.updateWebsite)
-  const updateMigration = useAppStore((s) => s.updateMigration)
   const addWebsite = useAppStore((s) => s.addWebsite)
+  const updateMigration = useAppStore((s) => s.updateMigration)
+  const addMigration = useAppStore((s) => s.addMigration)
+  const deleteMigrations = useAppStore((s) => s.deleteMigrations)
 
-  const site = useMemo(() => primaryWebsite(websites, client.id), [websites, client.id])
-  const [newSiteDomain, setNewSiteDomain] = useState('')
-  const [newSiteError, setNewSiteError] = useState<string | null>(null)
-  const [creatingSite, setCreatingSite] = useState(false)
-
-  const handleCreateSite = async () => {
-    const domain = newSiteDomain.trim().toLowerCase()
-    if (!domain) {
-      setNewSiteError('Enter a domain first.')
-      return
-    }
-    if (websites.some((w) => w.domain.toLowerCase() === domain)) {
-      setNewSiteError('This domain is already registered.')
-      return
-    }
-    setNewSiteError(null)
-    setCreatingSite(true)
-    try {
-      await addWebsite({
-        name: client.name,
-        domain,
-        clientId: client.id,
-        framework: 'react',
-        orderingStatus: 'not-started',
-        orderingStage: 'Not scheduled',
-        orderingStartDate: null,
-        orderingCompletedDate: null,
-        environment: 'Staging',
-        qaSignoff: 'pending',
-        liveUrl: `https://${domain}`,
-      })
-      toast.success('Website added', `Reopen "Edit" on ${client.name} to fill in the rest.`)
-      onClose()
-    } catch {
-      // withErrorToast in the store already surfaced the failure.
-    } finally {
-      setCreatingSite(false)
-    }
-  }
+  const site = useMemo(() => (client ? primaryWebsite(websites, client.id) : undefined), [websites, client])
   const migration = useMemo(() => (site ? migrationForWebsite(migrations, site.id) : undefined), [migrations, site])
 
-  const schema = useMemo(() => sectionEditSchema(websites, site?.domain), [websites, site?.domain])
+  const schema = useMemo(() => clientFormSchema(websites, site?.domain), [websites, site?.domain])
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
-  } = useForm<EditValues>({
+  } = useForm<ClientFormValuesShape>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: client.name,
-      phone: client.phone,
-      location: client.location,
-      notes: client.notes,
-      status: client.status,
-      stage: client.stage,
-      priority: client.priority,
+      name: client?.name ?? '',
+      phone: client?.phone ?? '',
+      location: client?.location ?? '',
+      notes: client?.notes ?? '',
+      status: client?.status ?? 'in-progress',
+      stage: client?.stage ?? 'onboarded',
+      priority: client?.priority ?? 'medium',
       domain: site?.domain ?? '',
       liveUrl: site?.liveUrl ?? '',
       framework: site?.framework ?? 'react',
@@ -658,56 +648,118 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
       orderingStatus: site?.orderingStatus ?? 'not-started',
       orderingStage: site?.orderingStage ?? '',
       qaSignoff: site?.qaSignoff ?? 'pending',
-      migrationStage: migration?.stage,
+      migrationStage: migration?.stage ?? '',
       migrationQuarter: migration?.quarter ?? '',
-      targetStack: migration?.targetStack ?? 'nextjs',
-      offers: client.capabilities.offers,
-      loyalty: client.capabilities.loyalty,
-      reservation: client.capabilities.reservation,
-      eventOrdering: client.capabilities.eventOrdering,
+      targetStack: migration?.targetStack === 'react' ? 'react' : 'nextjs',
+      offers: client?.capabilities.offers ?? 'unavailable',
+      loyalty: client?.capabilities.loyalty ?? 'unavailable',
+      reservation: client?.capabilities.reservation ?? 'unavailable',
+      eventOrdering: client?.capabilities.eventOrdering ?? 'unavailable',
     },
   })
 
+  const domainValue = watch('domain')
+  const hasSite = !!site || !!domainValue?.trim()
+
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await updateClient(client.id, {
-        name: values.name,
-        phone: values.phone,
-        location: values.location,
-        notes: values.notes,
-        status: values.status,
-        stage: values.stage,
-        priority: values.priority,
-        capabilities: {
-          offers: values.offers,
-          loyalty: values.loyalty,
-          reservation: values.reservation,
-          eventOrdering: values.eventOrdering,
-        },
-      })
-
-      if (site) {
-        await updateWebsite(site.id, {
-          domain: values.domain || site.domain,
-          liveUrl: values.liveUrl || `https://${values.domain || site.domain}`,
-          framework: values.framework ?? site.framework,
-          environment: values.environment ?? site.environment,
-          orderingStatus: values.orderingStatus ?? site.orderingStatus,
-          orderingStage: values.orderingStage || site.orderingStage,
-          qaSignoff: values.qaSignoff ?? site.qaSignoff,
+      if (isEdit && client) {
+        await updateClient(client.id, {
+          name: values.name,
+          phone: values.phone ?? '',
+          location: values.location,
+          notes: values.notes,
+          status: values.status,
+          stage: values.stage,
+          priority: values.priority,
+          capabilities: {
+            offers: values.offers,
+            loyalty: values.loyalty,
+            reservation: values.reservation,
+            eventOrdering: values.eventOrdering,
+          },
         })
-      }
 
-      if (migration) {
-        const patch: Partial<typeof migration> = {
-          quarter: values.migrationQuarter || migration.quarter,
-          targetStack: values.targetStack ?? migration.targetStack,
+        let siteId = site?.id
+        if (site) {
+          await updateWebsite(site.id, {
+            domain: values.domain || site.domain,
+            liveUrl: values.liveUrl || `https://${values.domain || site.domain}`,
+            framework: values.framework,
+            environment: values.environment,
+            orderingStatus: values.orderingStatus,
+            orderingStage: values.orderingStage || site.orderingStage,
+            qaSignoff: values.qaSignoff,
+          })
+        } else if (values.domain) {
+          siteId = await addWebsite({
+            name: values.name,
+            domain: values.domain,
+            clientId: client.id,
+            framework: values.framework,
+            orderingStatus: values.orderingStatus,
+            orderingStage: values.orderingStage || 'Not scheduled',
+            orderingStartDate: null,
+            orderingCompletedDate: null,
+            environment: values.environment,
+            qaSignoff: values.qaSignoff,
+            liveUrl: values.liveUrl || `https://${values.domain}`,
+          })
         }
-        if (values.migrationStage && values.migrationStage !== migration.stage) patch.stage = values.migrationStage
-        await updateMigration(migration.id, patch)
-      }
 
-      toast.success('Client updated', `${values.name} was saved.`)
+        if (migration) {
+          if (!values.migrationStage) {
+            await deleteMigrations([migration.id])
+          } else {
+            const patch: Partial<typeof migration> = {
+              quarter: values.migrationQuarter || migration.quarter,
+              targetStack: values.targetStack,
+            }
+            if (values.migrationStage !== migration.stage) patch.stage = values.migrationStage
+            await updateMigration(migration.id, patch)
+          }
+        } else if (siteId && values.migrationStage) {
+          await addMigration({
+            websiteId: siteId,
+            developerId: null,
+            stage: values.migrationStage,
+            progress: values.migrationStage === 'completed' ? 100 : 0,
+            priority: values.priority,
+            dueDate: new Date().toISOString().slice(0, 10),
+            quarter: values.migrationQuarter || quarterOptions()[0],
+            targetStack: values.targetStack,
+          })
+        }
+
+        toast.success('Client updated', `${values.name} was saved.`)
+      } else {
+        await createClient({
+          name: values.name,
+          phone: values.phone,
+          location: values.location,
+          notes: values.notes,
+          status: values.status,
+          stage: values.stage,
+          priority: values.priority,
+          domain: values.domain,
+          liveUrl: values.liveUrl,
+          framework: values.framework,
+          environment: values.environment,
+          orderingStatus: values.orderingStatus,
+          orderingStage: values.orderingStage,
+          qaSignoff: values.qaSignoff,
+          capabilities: {
+            offers: values.offers,
+            loyalty: values.loyalty,
+            reservation: values.reservation,
+            eventOrdering: values.eventOrdering,
+          },
+          migrationStage: values.migrationStage || undefined,
+          migrationQuarter: values.migrationQuarter,
+          targetStack: values.targetStack,
+        })
+        toast.success('Client created', values.domain ? `${values.name} was added with ${values.domain}.` : `${values.name} was added.`)
+      }
       onClose()
     } catch {
       // withErrorToast in the store already surfaced the failure — keep the drawer open so the user can retry.
@@ -718,8 +770,12 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
     <Drawer
       open
       onClose={onClose}
-      title="Edit Client"
-      description={client.name}
+      title={isEdit ? 'Edit Client' : 'Add Client'}
+      description={
+        isEdit
+          ? client?.name
+          : 'Captures onboarding, technology, ordering, migration and feature details in one place.'
+      }
       size="xl"
       footer={
         <>
@@ -727,24 +783,24 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
             Cancel
           </Button>
           <Button variant="primary" onClick={() => void onSubmit()}>
-            Save changes
+            {isEdit ? 'Save changes' : 'Create client'}
           </Button>
         </>
       }
     >
       <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
         <DrawerSection title="Client information">
-          <FormField label="Client / Brand name" htmlFor="ce-name" required error={errors.name?.message}>
-            <Input id="ce-name" invalid={!!errors.name} {...register('name')} />
+          <FormField label="Client / Brand name" htmlFor="cf-name" required error={errors.name?.message}>
+            <Input id="cf-name" placeholder="Bella Napoli Pizzeria" invalid={!!errors.name} {...register('name')} />
           </FormField>
-          <FormField label="Phone" htmlFor="ce-phone" required error={errors.phone?.message}>
-            <Input id="ce-phone" invalid={!!errors.phone} {...register('phone')} />
+          <FormField label="Phone" htmlFor="cf-phone" error={errors.phone?.message}>
+            <Input id="cf-phone" {...register('phone')} />
           </FormField>
-          <FormField label="Location" htmlFor="ce-location" required error={errors.location?.message}>
-            <Input id="ce-location" invalid={!!errors.location} {...register('location')} />
+          <FormField label="Location" htmlFor="cf-location" required error={errors.location?.message}>
+            <Input id="cf-location" placeholder="Austin, TX" invalid={!!errors.location} {...register('location')} />
           </FormField>
-          <FormField label="Status" htmlFor="ce-status">
-            <Select id="ce-status" {...register('status')}>
+          <FormField label="Status" htmlFor="cf-status">
+            <Select id="cf-status" {...register('status')}>
               {STATUS_VALUES.map((v) => (
                 <option key={v} value={v}>
                   {CLIENT_STATUS_LABELS[v]}
@@ -752,8 +808,8 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Current stage" htmlFor="ce-stage">
-            <Select id="ce-stage" {...register('stage')}>
+          <FormField label="Current stage" htmlFor="cf-stage">
+            <Select id="cf-stage" {...register('stage')}>
               {STAGE_VALUES.map((v) => (
                 <option key={v} value={v}>
                   {CLIENT_STAGE_LABELS[v]}
@@ -761,8 +817,8 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Priority" htmlFor="ce-priority">
-            <Select id="ce-priority" {...register('priority')}>
+          <FormField label="Priority" htmlFor="cf-priority">
+            <Select id="cf-priority" {...register('priority')}>
               {PRIORITY_VALUES.map((v) => (
                 <option key={v} value={v}>
                   {PRIORITY_LABELS[v]}
@@ -770,127 +826,111 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Remarks" htmlFor="ce-notes" className="col-span-2">
-            <Textarea id="ce-notes" rows={3} {...register('notes')} />
+          <FormField label="Remarks" htmlFor="cf-notes" className="col-span-2">
+            <Textarea id="cf-notes" rows={3} placeholder="Context, requirements, gotchas…" {...register('notes')} />
           </FormField>
         </DrawerSection>
 
-        {site ? (
-          <>
-            <DrawerSection title="Technology & environment">
-              <FormField label="Live URL / domain" htmlFor="ce-domain" error={errors.domain?.message}>
-                <Input id="ce-domain" invalid={!!errors.domain} {...register('domain')} />
-              </FormField>
-              <FormField label="Technology stack" htmlFor="ce-framework">
-                <Select id="ce-framework" {...register('framework')}>
-                  {FRAMEWORK_VALUES.map((v) => (
+        <DrawerSection title="Technology & environment">
+          <FormField
+            label="Website domain"
+            htmlFor="cf-domain"
+            error={errors.domain?.message}
+            hint={!hasSite ? 'Optional — leave blank to add technology, ordering and QA details later.' : undefined}
+            className="col-span-2"
+          >
+            <Input id="cf-domain" placeholder="bellanapoli.com" invalid={!!errors.domain} {...register('domain')} />
+          </FormField>
+          <FormField label="Technology stack" htmlFor="cf-framework">
+            <Select id="cf-framework" disabled={!hasSite} {...register('framework')}>
+              {FRAMEWORK_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {FRAMEWORK_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Environment" htmlFor="cf-environment">
+            <Select id="cf-environment" disabled={!hasSite} {...register('environment')}>
+              {ENVIRONMENTS_ORDERED.map((v) => (
+                <option key={v} value={v}>
+                  {ENVIRONMENT_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        </DrawerSection>
+
+        <DrawerSection title="Ordering & QA">
+          <FormField label="Embedded ordering status" htmlFor="cf-ordering">
+            <Select id="cf-ordering" disabled={!hasSite} {...register('orderingStatus')}>
+              {ORDERING_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {ORDERING_STATUS_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="Ordering stage" htmlFor="cf-ordering-stage">
+            <Input
+              id="cf-ordering-stage"
+              placeholder="Menu setup, Payments QA…"
+              disabled={!hasSite}
+              {...register('orderingStage')}
+            />
+          </FormField>
+          <FormField label="QA sign-off" htmlFor="cf-qa">
+            <Select id="cf-qa" disabled={!hasSite} {...register('qaSignoff')}>
+              {QA_SIGNOFF_ORDERED.map((v) => (
+                <option key={v} value={v}>
+                  {QA_SIGNOFF_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        </DrawerSection>
+
+        <DrawerSection title="Migration">
+          {hasSite ? (
+            <>
+              <FormField label="Target stack" htmlFor="cf-target-stack">
+                <Select id="cf-target-stack" {...register('targetStack')}>
+                  {MIGRATION_TARGET_VALUES.map((v) => (
                     <option key={v} value={v}>
                       {FRAMEWORK_LABELS[v]}
                     </option>
                   ))}
                 </Select>
               </FormField>
-              <FormField label="Environment" htmlFor="ce-environment">
-                <Select id="ce-environment" {...register('environment')}>
-                  {ENVIRONMENTS_ORDERED.map((v) => (
+              <FormField label="Migration status" htmlFor="cf-migration-stage">
+                <Select id="cf-migration-stage" {...register('migrationStage')}>
+                  <option value="">Not tracked</option>
+                  {MIGRATION_STAGE_VALUES.map((v) => (
                     <option key={v} value={v}>
-                      {ENVIRONMENT_LABELS[v]}
+                      {MIGRATION_STAGE_LABELS[v]}
                     </option>
                   ))}
                 </Select>
               </FormField>
-            </DrawerSection>
-
-            <DrawerSection title="Ordering & QA">
-              <FormField label="Embedded ordering status" htmlFor="ce-ordering">
-                <Select id="ce-ordering" {...register('orderingStatus')}>
-                  {ORDERING_VALUES.map((v) => (
-                    <option key={v} value={v}>
-                      {ORDERING_STATUS_LABELS[v]}
+              <FormField label="Migration quarter" htmlFor="cf-migration-quarter">
+                <Select id="cf-migration-quarter" {...register('migrationQuarter')}>
+                  <option value="">—</option>
+                  {quarterOptions().map((q) => (
+                    <option key={q} value={q}>
+                      {q}
                     </option>
                   ))}
                 </Select>
               </FormField>
-              <FormField label="Ordering stage" htmlFor="ce-ordering-stage">
-                <Input id="ce-ordering-stage" placeholder="Menu setup, Payments QA…" {...register('orderingStage')} />
-              </FormField>
-              <FormField label="QA sign-off" htmlFor="ce-qa">
-                <Select id="ce-qa" {...register('qaSignoff')}>
-                  {QA_SIGNOFF_ORDERED.map((v) => (
-                    <option key={v} value={v}>
-                      {QA_SIGNOFF_LABELS[v]}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            </DrawerSection>
-
-            <DrawerSection title="Migration">
-              {migration ? (
-                <>
-                  <FormField label="Current stack" htmlFor="ce-current-stack" hint="Mirrors the technology stack above.">
-                    <Input id="ce-current-stack" value={FRAMEWORK_LABELS[site.framework]} disabled />
-                  </FormField>
-                  <FormField label="Target stack" htmlFor="ce-target-stack">
-                    <Select id="ce-target-stack" {...register('targetStack')}>
-                      {FRAMEWORK_VALUES.map((v) => (
-                        <option key={v} value={v}>
-                          {FRAMEWORK_LABELS[v]}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField label="Migration status" htmlFor="ce-migration-stage">
-                    <Select id="ce-migration-stage" {...register('migrationStage')}>
-                      {MIGRATION_STAGE_VALUES.map((v) => (
-                        <option key={v} value={v}>
-                          {MIGRATION_STAGE_LABELS[v]}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField label="Migration quarter" htmlFor="ce-migration-quarter">
-                    <Select id="ce-migration-quarter" {...register('migrationQuarter')}>
-                      {quarterOptions().map((q) => (
-                        <option key={q} value={q}>
-                          {q}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                </>
-              ) : (
-                <p className="col-span-2 text-xs text-faint">
-                  No migration is tracked for this site yet — start one from the Migration tab.
-                </p>
-              )}
-            </DrawerSection>
-          </>
-        ) : (
-          <DrawerSection title="Technology & environment">
-            <p className="col-span-2 text-xs text-faint">
-              No website is registered for this client yet — Technology Stack, Environment, Embedded Ordering, QA
-              Sign-off and Migration all live on the primary website, so add one to unlock those fields.
-            </p>
-            <FormField label="Domain" htmlFor="ce-new-site-domain" error={newSiteError ?? undefined} className="col-span-2">
-              <div className="flex gap-2">
-                <Input
-                  id="ce-new-site-domain"
-                  placeholder="restaurant.com"
-                  value={newSiteDomain}
-                  onChange={(e) => setNewSiteDomain(e.target.value)}
-                />
-                <Button type="button" variant="secondary" onClick={() => void handleCreateSite()} disabled={creatingSite}>
-                  {creatingSite ? 'Adding…' : 'Add website'}
-                </Button>
-              </div>
-            </FormField>
-          </DrawerSection>
-        )}
+            </>
+          ) : (
+            <p className="col-span-2 text-xs text-faint">Add a website domain above to unlock migration tracking.</p>
+          )}
+        </DrawerSection>
 
         <DrawerSection title="Feature enablement">
-          <FormField label="Offers" htmlFor="ce-offers">
-            <Select id="ce-offers" {...register('offers')}>
+          <FormField label="Offers" htmlFor="cf-offers">
+            <Select id="cf-offers" {...register('offers')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
                 <option key={v} value={v}>
                   {CAPABILITY_STATE_LABELS[v]}
@@ -898,8 +938,8 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Loyalty" htmlFor="ce-loyalty">
-            <Select id="ce-loyalty" {...register('loyalty')}>
+          <FormField label="Loyalty" htmlFor="cf-loyalty">
+            <Select id="cf-loyalty" {...register('loyalty')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
                 <option key={v} value={v}>
                   {CAPABILITY_STATE_LABELS[v]}
@@ -907,8 +947,8 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Reservation" htmlFor="ce-reservation">
-            <Select id="ce-reservation" {...register('reservation')}>
+          <FormField label="Reservation" htmlFor="cf-reservation">
+            <Select id="cf-reservation" {...register('reservation')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
                 <option key={v} value={v}>
                   {CAPABILITY_STATE_LABELS[v]}
@@ -916,8 +956,8 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
               ))}
             </Select>
           </FormField>
-          <FormField label="Event ordering" htmlFor="ce-event-ordering">
-            <Select id="ce-event-ordering" {...register('eventOrdering')}>
+          <FormField label="Event ordering" htmlFor="cf-event-ordering">
+            <Select id="cf-event-ordering" {...register('eventOrdering')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
                 <option key={v} value={v}>
                   {CAPABILITY_STATE_LABELS[v]}
@@ -930,157 +970,5 @@ function ClientEditDrawer({ client, onClose }: { client: Client; onClose: () => 
         <button type="submit" className="hidden" aria-hidden />
       </form>
     </Drawer>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Add modal — creates client + primary website via saveClientForm     */
-/* ------------------------------------------------------------------ */
-
-function ClientAddModal({ onClose }: { onClose: () => void }) {
-  const websites = useAppStore((s) => s.websites)
-  const createClient = useAppStore((s) => s.createClient)
-
-  const addSchema = useMemo(() => {
-    const domains = new Set(websites.map((w) => w.domain.toLowerCase()))
-    return z.object({
-      name: z.string().min(2, 'Name must be at least 2 characters'),
-      domain: z
-        .string()
-        .regex(DOMAIN_RE, 'Enter a valid domain, e.g. restaurant.com')
-        .refine((d) => !domains.has(d.toLowerCase()), 'This domain is already registered')
-        .optional()
-        .or(z.literal('')),
-      location: z.string().min(2, 'Location is required'),
-      phone: z.string(),
-      orderingStatus: z.enum(ORDERING_VALUES),
-      framework: z.enum(FRAMEWORK_VALUES),
-      environment: z.enum(ENV_VALUES),
-      qaSignoff: z.enum(QA_VALUES),
-      priority: z.enum(PRIORITY_VALUES),
-      notes: z.string(),
-    })
-  }, [websites])
-
-  type AddValues = z.infer<typeof addSchema>
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<AddValues>({
-    resolver: zodResolver(addSchema),
-    defaultValues: {
-      name: '',
-      domain: '',
-      location: '',
-      phone: '',
-      orderingStatus: 'not-started',
-      framework: 'react',
-      environment: 'Staging',
-      qaSignoff: 'pending',
-      priority: 'medium',
-      notes: '',
-    },
-  })
-
-  const onSubmit = handleSubmit(async (values) => {
-    const payload: ClientFormValues = { ...values }
-    try {
-      await createClient(payload)
-      toast.success('Client created', values.domain ? `${values.name} was added with ${values.domain}.` : `${values.name} was added.`)
-      onClose()
-    } catch {
-      // withErrorToast in the store already surfaced the failure — keep the modal open so the user can retry.
-    }
-  })
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Add Client"
-      description="Creates the client and registers its primary website."
-      size="lg"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={() => void onSubmit()}>
-            Create client
-          </Button>
-        </>
-      }
-    >
-      <form onSubmit={(e) => void onSubmit(e)} className="grid grid-cols-2 gap-3">
-        <FormField label="Client name" htmlFor="ca-name" required error={errors.name?.message}>
-          <Input id="ca-name" placeholder="Bella Napoli Pizzeria" invalid={!!errors.name} {...register('name')} />
-        </FormField>
-        <FormField
-          label="Website domain"
-          htmlFor="ca-domain"
-          error={errors.domain?.message}
-          hint="Optional — leave blank to add technology, ordering and QA details for this client later."
-        >
-          <Input id="ca-domain" placeholder="bellanapoli.com" invalid={!!errors.domain} {...register('domain')} />
-        </FormField>
-        <FormField label="Phone" htmlFor="ca-phone" error={errors.phone?.message}>
-          <Input id="ca-phone" {...register('phone')} />
-        </FormField>
-        <FormField label="Location" htmlFor="ca-location" required error={errors.location?.message}>
-          <Input id="ca-location" placeholder="Austin, TX" invalid={!!errors.location} {...register('location')} />
-        </FormField>
-        <FormField label="Ordering status" htmlFor="ca-ordering">
-          <Select id="ca-ordering" {...register('orderingStatus')}>
-            {ORDERING_VALUES.map((v) => (
-              <option key={v} value={v}>
-                {ORDERING_STATUS_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Framework" htmlFor="ca-framework">
-          <Select id="ca-framework" {...register('framework')}>
-            {FRAMEWORK_VALUES.map((v) => (
-              <option key={v} value={v}>
-                {FRAMEWORK_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Environment" htmlFor="ca-environment">
-          <Select id="ca-environment" {...register('environment')}>
-            {ENVIRONMENTS_ORDERED.map((v) => (
-              <option key={v} value={v}>
-                {ENVIRONMENT_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="QA sign-off" htmlFor="ca-qa">
-          <Select id="ca-qa" {...register('qaSignoff')}>
-            {QA_SIGNOFF_ORDERED.map((v) => (
-              <option key={v} value={v}>
-                {QA_SIGNOFF_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Priority" htmlFor="ca-priority">
-          <Select id="ca-priority" {...register('priority')}>
-            {PRIORITY_VALUES.map((v) => (
-              <option key={v} value={v}>
-                {PRIORITY_LABELS[v]}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Notes" htmlFor="ca-notes" className="col-span-2">
-          <Textarea id="ca-notes" rows={3} placeholder="Context, requirements, gotchas…" {...register('notes')} />
-        </FormField>
-        <button type="submit" className="hidden" aria-hidden />
-      </form>
-    </Modal>
   )
 }
