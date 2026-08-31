@@ -17,10 +17,16 @@ interface DonutChartProps {
   className?: string
 }
 
-/** Themed donut chart with a center stat. */
+/** Themed donut chart with a center stat. Renders a neutral placeholder ring when every slice is 0. */
 export function DonutChart({ data, centerValue, centerLabel, size = 180, thickness = 18, className }: DonutChartProps) {
   const outer = size / 2
   const inner = outer - thickness
+  const isEmpty = data.every((d) => d.value <= 0)
+  // Zero-value slices still consume paddingAngle space, leaving a visible gap
+  // even when only one slice actually has weight — drop them before rendering.
+  const chartData = isEmpty
+    ? [{ name: 'No data', value: 1, color: 'rgb(var(--color-line-strong))' }]
+    : data.filter((d) => d.value > 0)
   return (
     <div className={cn('relative shrink-0', className)} style={{ width: size, height: size }} role="img" aria-label={
       `${centerLabel ?? 'Chart'}: ${data.map((d) => `${d.name} ${d.value}`).join(', ')}`
@@ -28,20 +34,20 @@ export function DonutChart({ data, centerValue, centerLabel, size = 180, thickne
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
-            data={data}
+            data={chartData}
             dataKey="value"
             nameKey="name"
             cx="50%"
             cy="50%"
             innerRadius={inner}
             outerRadius={outer}
-            paddingAngle={data.length > 1 ? 2 : 0}
+            paddingAngle={chartData.length > 1 ? 2 : 0}
             strokeWidth={0}
             cornerRadius={4}
             isAnimationActive
             animationDuration={600}
           >
-            {data.map((slice) => (
+            {chartData.map((slice) => (
               <Cell key={slice.name} fill={slice.color} />
             ))}
           </Pie>

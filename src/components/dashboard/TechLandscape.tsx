@@ -10,14 +10,18 @@ export function TechLandscape() {
   const data = useMemo<BarDatum[]>(() => {
     const count = (framework: string) => websites.filter((w) => w.framework === framework).length
 
-    return [
+    const all = [
       { label: 'Next.js', value: count('nextjs'), color: '#dc2626' },
-      { label: 'React.js', value: count('react'), color: '#475569' },
-      { label: 'WordPress', value: count('wordpress'), color: '#64748b' },
-      { label: 'Shopify', value: count('shopify'), color: '#94a3b8' },
-      { label: 'HTML', value: count('html'), color: '#cbd5e1' },
-    ].filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value)
+      { label: 'React.js', value: count('react'), color: '#8b5cf6' },
+      { label: 'WordPress', value: count('wordpress'), color: '#0ea5e9' },
+      { label: 'Shopify', value: count('shopify'), color: '#10b981' },
+      { label: 'HTML', value: count('html'), color: '#f59e0b' },
+      { label: 'WIX', value: count('wix'), color: '#ec4899' },
+    ]
+    const present = all.filter((d) => d.value > 0).sort((a, b) => b.value - a.value)
+    // No websites registered yet — show every platform at 0 as a placeholder
+    // instead of an empty chart, so the categories are visible before data exists.
+    return present.length > 0 ? present : all
   }, [websites])
 
   return (

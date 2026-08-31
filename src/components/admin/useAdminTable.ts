@@ -18,6 +18,8 @@ interface UseAdminTableOptions<T> {
   initialSorting?: SortingState
   pageSize?: number
   enableSelection?: boolean
+  /** Columns hidden by default (still toggleable from the Columns menu). */
+  initialColumnVisibility?: VisibilityState
 }
 
 /**
@@ -32,10 +34,11 @@ export function useAdminTable<T>({
   initialSorting = [],
   pageSize = 10,
   enableSelection = true,
+  initialColumnVisibility = {},
 }: UseAdminTableOptions<T>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility)
 
   const table = useReactTable({
     data,

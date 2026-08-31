@@ -1,0 +1,221 @@
+BRISQUE OPS CONSOLE — TECHNICAL PROJECT OVERVIEW
+(repo: embedded-ordering-tracker, branch: New-UI-Red)
+=================================================================
+
+1. WHAT THIS PROJECT IS
+-----------------------
+Despite the repo name suggesting embedded firmware, this is a pure
+client-side single-page web application (React + Vite + TypeScript) —
+an internal operations dashboard for tracking restaurant clients through
+two initiatives:
+  (a) rolling out online ("embedded") ordering on their websites
+  (b) migrating those sites from React to Next.js
+
+"Embedded" refers to a product feature (embedding an ordering widget
+into a client's website), not embedded systems engineering. There is
+no IoT/hardware/serial/firmware code anywhere in the codebase.
+
+Top-level layout:
+  src/            application code
+  public/         static assets
+  dist/           build output
+  docs/           internal spec/architecture docs
+  firebase.json, firestore.rules, firestore.indexes.json, storage.rules
+                  Firebase project configuration
+  vite.config.ts, tailwind.config.js, tsconfig.json, postcss.config.js
+
+
+2. FRONTEND
+-----------
+Stack:
+  - React 19, Vite 8, TypeScript (strict)
+  - Tailwind CSS 3.4 with semantic design tokens
+  - clsx / tailwind-merge via a cn() helper
+
+Routing (react-router-dom v7, src/routes/index.tsx):
+  /login  (public)
+  /dashboard, /clients, /features, /migration, /admin
+  (all protected via ProtectedRoute + AppLayout, lazy-loaded, plus a
+  catch-all NotFound)
+
+State management:
+  Zustand v5 (src/store/appStore.ts, ~800 lines) is the single source
+  of truth for clients, websites, features, migrations, priorities,
+  team members, audit logs, and notifications. Originally persisted to
+  localStorage only; now wired to live Firestore listeners.
+
+Key pages / components:
+  - Dashboard: onboarding/migration metrics, donut chart,
+    EmbeddedOrderingRollout widget, weekly priority table
+  - ClientTracker: TanStack Table v8 with filters/sorting/bulk edit,
+    CRUD via React Hook Form + Zod
+  - Features: feature catalog with category grouping and toggles
+  - Migration: drag-and-drop Kanban (@dnd-kit) tracking React→Next.js
+    migration progress
+  - AdminPanel: unified data management, roles/permissions matrix,
+    audit trail, settings
+
+Shared UI kit (src/components/common/, ~25 self-built primitives):
+  Button, Modal, Drawer, Popover, DropdownMenu, Tabs, Tooltip, Kbd,
+  Switch, Checkbox, Select, SearchInput, FilterDropdown, Pagination,
+  ConfirmDialog, EmptyState/ErrorState, Skeleton, Badge/StatusBadge/
+  PriorityBadge, ProgressBar, DonutChart/BarChart, MetricCard/KPICard,
+  AnimatedNumber, Timeline — all styled through the shared token
+  system rather than a pre-made UI library like shadcn/MUI.
+
+Other notable libraries: framer-motion (animation), recharts (charts),
+lucide-react (icons), date-fns.
+
+
+3. UI / DESIGN SYSTEM
+----------------------
+Design tokens are CSS variables (src/index.css) mapped into Tailwind
+(tailwind.config.js): bg-canvas, bg-card, bg-elev, text-ink, text-sub,
+text-faint, border-line / border-line-strong.
+
+  - Light mode: slate palette (canvas #f8fafc, ink slate-900, etc.)
+  - Dark mode: true neutral black (rgb 10 10 11), not a tinted dark —
+    chosen so the brand red reads as an accent, not a tint. Toggled via
+    a `.dark` class (ThemeContext), not just prefers-color-scheme.
+
+Brand color: a single `primary` red scale (50–950, base #ef4444) drives
+every accent — buttons, focus rings, active nav state, links, chart and
+progress accents — so the app's whole accent color is a one-line change.
+This red-accent theming is the substance of the "New-UI-Red" branch.
+
+Typography: Inter for UI text, system monospace for code/numeric
+contexts, plus a custom "2xs" size for dense uppercase eyebrow labels.
+
+Layout shell (AppLayout.tsx): persistent Sidebar + Topbar around a
+routed <Outlet>, with:
+  - Global Ctrl/Cmd+K command palette (works even while typing in inputs)
+  - Page transitions via framer-motion (fade + slight slide, 180ms)
+  - Route-level code splitting with Suspense + a skeleton-card fallback
+    that mimics the dashboard grid while a page chunk loads
+  - App-wide ErrorBoundary and toast notifications (Toaster)
+  - Content capped at max-w-[1600px], centered, responsive padding
+
+Notable interaction patterns:
+  - Command palette (Cmd/Ctrl+K) for global navigation/actions
+  - Drag-and-drop Kanban on the Migration board (@dnd-kit)
+  - Dense data table with sorting/filtering/inline bulk edit on Client
+    Tracker (TanStack Table)
+  - Slide-over drawers (MigrationDrawer, ClientExpansionPanel) instead
+    of full-page navigation for record detail/edit
+  - Present Mode (src/components/present/PresentMode.tsx) — a distinct
+    full-screen presentation view, likely for stakeholder demos/status
+    readouts
+  - Live-data affordances: LiveIndicator (real-time sync status),
+    NotificationsPopover, animated KPI counters on the dashboard
+
+Accessibility: consistent focus-ring utility (visible keyboard focus,
+red ring), thin themed scrollbars, dark-mode-aware native date-picker
+icon inversion, semantic <main id="main"> landmark.
+
+Net effect: a dense, data-heavy internal ops console with a deliberately
+restrained black/white/red dark-first aesthetic, built as a custom
+component system.
+
+
+4. BACKEND
+----------
+No custom application server (no Express/Node API routes). The
+"backend" is Firebase used purely as BaaS (added in the "BE-added"
+commit):
+
+  - Firebase Auth (src/firebase/auth.ts) — email/password sign-in,
+    exposed via AuthContext / useAuth
+  - Firestore (src/firebase/firestore.ts, src/firebase/collection.ts) —
+    generic collection helpers (subscribeCollection, addNewDoc,
+    patchDoc, removeDoc, batched writes) used for clients, websites,
+    migrations, priorities, auditLogs, notifications, and a
+    users/{uid} profile collection with self-provisioning (new sign-ins
+    default to a low-privilege "viewer" role; escalation is admin-only,
+    enforced by Firestore security rules)
+  - Firebase Storage initialized, with storage.rules present for any
+    file uploads
+
+Access control is delegated entirely to firestore.rules / storage.rules
+— there is no server-side API layer; the SPA talks to Firestore directly.
+
+
+5. DATA LAYER
+--------------
+Originally 100% mock/seed data (src/data/clientImportSource.ts) held in
+Zustand and persisted to localStorage (per the original
+docs/ARCHITECTURE.md, which still describes a "frontend-only, no
+backend" design). The "BE-added" commit layered real-time Firestore
+sync on top via useFirestoreSync (mounted in AppLayout), calling
+initFirestoreSync() in the store to attach onSnapshot listeners once a
+user is authenticated — replacing/merging local seed data with live
+Firestore documents. Dates are stored as ISO strings (not Firestore
+Timestamps) to keep types uniform. The "updated-json" commit only
+touched package-lock.json (a dependency lockfile bump) — no app data
+changes.
+
+
+6. EMBEDDED / HARDWARE CODE
+-----------------------------
+None. No serial/UART, MQTT, WebSocket-to-device, GPIO, or firmware code
+exists in src/. The project name is a misnomer relative to its actual
+content — it's a restaurant-client operations/onboarding dashboard, not
+an IoT project.
+
+
+7. BUILD TOOLING & DEPENDENCIES
+---------------------------------
+  - Vite (dev server on port 5199, build/preview)
+  - tsc --noEmit for type-checking
+  - oxlint (Rust-based, fast ESLint alternative) via .oxlintrc.json
+  - PostCSS/Tailwind pipeline
+  - Notable deps: @tanstack/react-table, @dnd-kit/*, react-hook-form +
+    zod + @hookform/resolvers, zustand (+ persist middleware), recharts,
+    framer-motion, date-fns, firebase SDK v12
+
+
+8. ARCHITECTURE / DATA FLOW
+------------------------------
+Browser SPA -> React Router -> Zustand store (in-memory cache)
+  <-> Firestore (real-time onSnapshot sync)
+with Firebase Auth gating access via ProtectedRoute.
+
+All CRUD actions (create/update/delete client, move migration card,
+toggle feature, etc.) go through store action methods that write to
+Firestore (patchDoc, addNewDoc, batched writes) and automatically
+append an audit-log entry. Firestore's snapshot listeners then push
+the change back down to update the UI for all connected clients —
+giving multi-user real-time collaboration without a custom backend
+server. No embedded device or external hardware participates in this
+data flow.
+
+
+9. BUSINESS DOMAIN LOGIC
+----------------------------
+The app manages a portfolio of restaurant clients (Brisque) undergoing:
+  (a) online-ordering rollout, and
+  (b) a React -> Next.js website migration
+
+Core entities (src/types/index.ts):
+  - Client            1:N Website
+  - Website           tracks orderingStatus (active / in-progress /
+                       no-need / not-started) and framework (react /
+                       nextjs / etc.)
+  - Migration          Kanban stage (planning -> in-progress ->
+                       testing -> completed), tied conceptually 1:1 to
+                       a website; completing a migration auto-flips the
+                       website's framework to "nextjs"
+  - PriorityItem       weekly prioritized work items keyed by ISO week
+  - Feature            categorized capability catalog (ordering,
+                       reservation, SEO, marketing, etc.)
+  - ClientCapabilities per-client toggles (Offers / Loyalty /
+                       Reservation / Event-Ordering)
+  - TeamMember /
+    UserProfile        RBAC with roles: super-admin / admin / manager /
+                       developer / viewer, plus a permission matrix
+  - AuditLog /
+    AppNotification    traceability of all changes
+
+The dashboard's headline metric — the percentage of the client website
+portfolio with online ordering active/in-progress/not-started — is the
+"Embedded Ordering Rollout," the actual meaning behind the project's
+name.

@@ -14,11 +14,11 @@
     text-faint — tertiary text / placeholders
 */
 :root {
-  --color-canvas: 248 250 252; /* slate-50 */
+  --color-canvas: 244 246 251; /* soft lavender-tinted off-white */
   --color-card: 255 255 255;
-  --color-elev: 241 245 249; /* slate-100 */
-  --color-line: 226 232 240; /* slate-200 */
-  --color-line-strong: 203 213 225; /* slate-300 */
+  --color-elev: 238 241 248;
+  --color-line: 228 232 242;
+  --color-line-strong: 205 211 227;
   --color-ink: 15 23 42; /* slate-900 */
   --color-sub: 100 116 139; /* slate-500 */
   --color-faint: 148 163 184; /* slate-400 */
@@ -41,6 +41,16 @@ html,
 body,
 #root {
   height: 100%;
+}
+
+/* The app shell's sidebar is `position: sticky` — if any wide content (e.g.
+   a many-column admin table) pushes the document wider than the viewport,
+   the whole page would scroll horizontally and drag the sidebar along with
+   it. Tables scroll internally (see TableShell); the page itself never
+   should. */
+html,
+body {
+  overflow-x: hidden;
 }
 
 body {
@@ -75,7 +85,7 @@ body {
 @layer components {
   /* Card shell used across the app */
   .app-card {
-    @apply rounded-lg border border-line bg-card shadow-card;
+    @apply rounded-2xl border border-line bg-card shadow-card;
   }
 
   /* Dense table cell defaults */

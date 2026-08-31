@@ -9,15 +9,15 @@ import { SkeletonCard } from './Skeleton'
 export type MetricTone = 'emerald' | 'amber' | 'slate' | 'red' | 'indigo' | 'sky' | 'violet'
 
 // 'indigo' is this card's brand/primary emphasis tone (now red); 'sky' and
-// 'violet' are kept as neutral so the wider palette stays restrained.
+// 'violet' round out the accent palette for the lighter, more colorful look.
 const toneConfig: Record<MetricTone, { iconWrap: string; bar: 'emerald' | 'amber' | 'slate' | 'red' | 'primary' | 'sky' | 'violet' }> = {
   emerald: { iconWrap: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400', bar: 'emerald' },
   amber: { iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400', bar: 'amber' },
   slate: { iconWrap: 'bg-slate-200/70 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400', bar: 'slate' },
   red: { iconWrap: 'bg-red-100 text-red-600 dark:bg-red-500/15 dark:text-red-400', bar: 'red' },
   indigo: { iconWrap: 'bg-primary-100 text-primary-600 dark:bg-primary-500/15 dark:text-primary-400', bar: 'primary' },
-  sky: { iconWrap: 'bg-slate-200/70 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400', bar: 'slate' },
-  violet: { iconWrap: 'bg-slate-200/70 text-slate-600 dark:bg-slate-500/15 dark:text-slate-400', bar: 'slate' },
+  sky: { iconWrap: 'bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400', bar: 'sky' },
+  violet: { iconWrap: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400', bar: 'violet' },
 }
 
 export interface MetricCardProps {

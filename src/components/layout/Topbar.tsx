@@ -17,7 +17,7 @@ export function Topbar() {
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/90 px-4 backdrop-blur sm:px-5">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-card/90 px-4 backdrop-blur sm:px-5 lg:top-3 lg:mx-3 lg:rounded-2xl lg:border lg:shadow-float">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
@@ -27,9 +27,12 @@ export function Topbar() {
         >
           <Menu className="h-[18px] w-[18px]" aria-hidden />
         </button>
-        <div className="min-w-0 leading-tight">
-          <h1 className="truncate text-sm font-bold tracking-tight text-ink">Brisque Ops</h1>
-          <p className="hidden truncate text-2xs font-medium text-faint sm:block">Operations Command Center</p>
+        <div className="flex min-w-0 items-center gap-2 lg:hidden">
+          <img src="/red-logo.webp" alt="Brisque" className="h-6 w-6 shrink-0 object-contain" />
+          <div className="min-w-0 leading-tight">
+            <h1 className="truncate text-sm font-bold tracking-tight text-ink">Brisque Ops</h1>
+            <p className="hidden truncate text-2xs font-medium text-faint sm:block">Operations Command Center</p>
+          </div>
         </div>
       </div>
 

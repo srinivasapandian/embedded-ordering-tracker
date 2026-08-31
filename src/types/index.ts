@@ -3,7 +3,7 @@
 /* ------------------------------------------------------------------ */
 
 export type OrderingStatus = 'active' | 'in-progress' | 'no-need' | 'not-started'
-export type Framework = 'react' | 'nextjs' | 'html' | 'shopify' | 'wordpress' | 'unknown'
+export type Framework = 'react' | 'nextjs' | 'html' | 'shopify' | 'wordpress' | 'wix' | 'unknown'
 export type MigrationStage = 'planning' | 'in-progress' | 'testing' | 'completed'
 export type Priority = 'high' | 'medium' | 'low'
 export type ClientStatus = 'active' | 'in-progress' | 'completed' | 'blocked'
@@ -71,12 +71,14 @@ export interface ActivityEvent {
   description?: string
 }
 
-/** Per-client rollout state for the four capabilities the Admin Panel manages. */
+/** Per-client rollout state for the capabilities the Admin Panel manages. */
 export interface ClientCapabilities {
+  ordering: CapabilityState
   offers: CapabilityState
   loyalty: CapabilityState
   reservation: CapabilityState
   eventOrdering: CapabilityState
+  inFramework: CapabilityState
 }
 
 export interface Client {
@@ -111,6 +113,16 @@ export interface Website {
   qaSignoff: QaSignoff
   /** Public URL customers/reviewers use (defaults to https://{domain}). */
   liveUrl: string
+  /** Figma design file URL for this website, if one exists. */
+  figmaLink: string
+  /** Date the site went live in production (distinct from ordering start/completion). */
+  deployedDate: string | null
+  /** Source repo for this website's codebase, if it has its own (e.g. 'org/client-site'). */
+  repoName: string
+  /** Branch actively being developed against. */
+  devLatestBranch: string
+  /** Branch deployed to production. */
+  releaseBranch: string
   addedAt: string
   updatedAt: string
 }
@@ -257,6 +269,7 @@ export const FRAMEWORK_LABELS: Record<Framework, string> = {
   html: 'HTML',
   shopify: 'Shopify',
   wordpress: 'WordPress',
+  wix: 'WIX',
   unknown: 'Unknown',
 }
 
@@ -357,10 +370,12 @@ export const CAPABILITY_STATE_LABELS: Record<CapabilityState, string> = {
 export const CAPABILITY_STATES_ORDERED: CapabilityState[] = ['enabled', 'in-progress', 'unavailable']
 
 export const CAPABILITY_LABELS: Record<keyof ClientCapabilities, string> = {
+  ordering: 'Ordering',
   offers: 'Offers',
   loyalty: 'Loyalty',
   reservation: 'Reservation',
   eventOrdering: 'Event Ordering',
+  inFramework: 'In Framework',
 }
 
 /** Quarter options offered by Migration Quarter pickers (current year ± 1). */

@@ -64,6 +64,11 @@ export interface ClientFormValues {
   qaSignoff?: QaSignoff
   liveUrl?: string
   orderingStage?: string
+  figmaLink?: string
+  deployedDate?: string | null
+  repoName?: string
+  devLatestBranch?: string
+  releaseBranch?: string
   capabilities?: ClientCapabilities
   /** Optional migration record to create alongside the website — omit to leave migration untracked. */
   migrationStage?: MigrationStage
@@ -179,10 +184,12 @@ async function withErrorToast<T>(op: () => Promise<T>, failMessage: string): Pro
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_CAPABILITIES: ClientCapabilities = {
+  ordering: 'unavailable',
   offers: 'unavailable',
   loyalty: 'unavailable',
   reservation: 'unavailable',
   eventOrdering: 'unavailable',
+  inFramework: 'unavailable',
 }
 
 /**
@@ -236,6 +243,11 @@ function normalizeWebsite(raw: Website): Website {
     environment: raw.environment ?? 'Staging',
     qaSignoff: raw.qaSignoff ?? 'pending',
     liveUrl: raw.liveUrl || (domain ? `https://${domain}` : ''),
+    figmaLink: raw.figmaLink ?? '',
+    deployedDate: isoOrNull(raw.deployedDate),
+    repoName: raw.repoName ?? '',
+    devLatestBranch: raw.devLatestBranch ?? '',
+    releaseBranch: raw.releaseBranch ?? '',
     addedAt: isoOrNow(raw.addedAt),
     updatedAt: isoOrNow(raw.updatedAt),
   }
@@ -395,6 +407,11 @@ export const useAppStore = create<AppState>()((set, get) => {
             environment: values.environment ?? 'Staging',
             qaSignoff: values.qaSignoff ?? 'pending',
             liveUrl: values.liveUrl || `https://${domain}`,
+            figmaLink: values.figmaLink ?? '',
+            deployedDate: values.deployedDate ?? null,
+            repoName: values.repoName ?? '',
+            devLatestBranch: values.devLatestBranch ?? '',
+            releaseBranch: values.releaseBranch ?? '',
             addedAt: created,
             updatedAt: created,
           }

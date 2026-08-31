@@ -108,12 +108,15 @@ export function AdminDataTable<T>({ table, empty, rowClassName, pageSizeOptions,
         <thead>
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id} className={cn('border-b border-line bg-elev/40', stickyHeader && 'sticky top-0 z-10 backdrop-blur')}>
-              {hg.headers.map((header) => {
+              {hg.headers.map((header, i) => {
                 const size = header.column.columnDef.size
                 return (
                   <th
                     key={header.id}
-                    className="th-cell whitespace-nowrap"
+                    className={cn(
+                      'th-cell whitespace-nowrap',
+                      i === 0 && 'sticky left-0 z-20 border-r border-line bg-elev',
+                    )}
                     style={size !== undefined && size !== 150 ? { width: size } : undefined}
                   >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
@@ -133,8 +136,11 @@ export function AdminDataTable<T>({ table, empty, rowClassName, pageSizeOptions,
                 rowClassName?.(row.original),
               )}
             >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="td-cell">
+              {row.getVisibleCells().map((cell, i) => (
+                <td
+                  key={cell.id}
+                  className={cn('td-cell', i === 0 && 'sticky left-0 z-10 border-r border-line bg-card')}
+                >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}

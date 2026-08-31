@@ -98,6 +98,24 @@ export function ClientExpansionPanel({
               <InfoRow label="Current stage" value={site.orderingStage} />
               <InfoRow label="QA sign-off" value={QA_SIGNOFF_LABELS[site.qaSignoff]} />
               <InfoRow label="Live URL" value={site.liveUrl} />
+              <InfoRow label="Deployed to live" value={site.deployedDate ? fmtDate(site.deployedDate) : '—'} />
+              <InfoRow
+                label="Figma design"
+                value={
+                  site.figmaLink ? (
+                    <a
+                      href={site.figmaLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary-600 underline-offset-2 hover:underline dark:text-primary-400"
+                    >
+                      View design
+                    </a>
+                  ) : (
+                    '—'
+                  )
+                }
+              />
             </dl>
           </div>
         ) : (
@@ -139,6 +157,9 @@ export function ClientExpansionPanel({
                   )
                 }
               />
+              <InfoRow label="Repo name" value={site.repoName || '—'} />
+              <InfoRow label="Dev latest branch" value={site.devLatestBranch || '—'} />
+              <InfoRow label="Release branch" value={site.releaseBranch || '—'} />
             </dl>
           </div>
         ) : (

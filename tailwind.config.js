@@ -47,9 +47,10 @@ export default {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       boxShadow: {
-        card: '0 1px 2px 0 rgb(0 0 0 / 0.04)',
+        card: '0 8px 24px -12px rgb(15 23 42 / 0.10), 0 2px 6px -2px rgb(15 23 42 / 0.05)',
         pop: '0 4px 24px -4px rgb(0 0 0 / 0.12), 0 2px 8px -2px rgb(0 0 0 / 0.08)',
         drawer: '-8px 0 32px -8px rgb(0 0 0 / 0.18)',
+        float: '0 20px 40px -16px rgb(15 23 42 / 0.16), 0 4px 12px -4px rgb(15 23 42 / 0.08)',
       },
       keyframes: {
         shimmer: {

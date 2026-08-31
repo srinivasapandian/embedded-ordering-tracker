@@ -1,13 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Boxes,
-  GitBranch,
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   ShieldCheck,
+  Table2,
   Users,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
@@ -21,8 +20,7 @@ import { ROLE_LABELS } from '@/types'
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/clients', label: 'Client Tracker', icon: Users },
-  { to: '/features', label: 'Features', icon: Boxes },
-  { to: '/migration', label: 'Migration', icon: GitBranch },
+  { to: '/master-tracker', label: 'Master Tracker', icon: Table2 },
   { to: '/admin', label: 'Admin Panel', icon: ShieldCheck },
 ]
 
@@ -59,13 +57,11 @@ export function Sidebar() {
           x: isMobile ? (mobileNavOpen ? 0 : -272) : 0,
         }}
         transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-        className="fixed left-0 top-0 bottom-0 z-50 flex h-screen shrink-0 flex-col border-r border-line bg-card lg:sticky lg:bottom-auto lg:z-40"
+        className="fixed left-0 top-0 bottom-0 z-50 flex h-screen shrink-0 flex-col overflow-hidden border border-line bg-card lg:sticky lg:top-3 lg:my-3 lg:ml-3 lg:h-[calc(100vh-1.5rem)] lg:z-40 lg:rounded-2xl lg:shadow-float"
       >
         {/* Brand mark */}
         <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-4', effectiveCollapsed && 'justify-center px-0')}>
-          <span className="flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-md bg-primary-600 text-xs font-bold text-white">
-            B
-          </span>
+          <img src="/red-logo.webp" alt="Brisque" className="h-7 w-7 shrink-0 select-none object-contain" />
           {!effectiveCollapsed && (
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-sm font-bold tracking-tight text-ink">Brisque Ops</span>
@@ -84,10 +80,10 @@ export function Sidebar() {
                 onClick={() => setMobileNavOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'focus-ring group flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors',
+                    'focus-ring group flex h-9 items-center gap-2.5 rounded-xl px-2.5 text-sm font-medium transition-colors',
                     effectiveCollapsed && 'justify-center px-0',
                     isActive
-                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300'
+                      ? 'bg-primary-600 text-white shadow-sm dark:bg-primary-500'
                       : 'text-sub hover:bg-elev hover:text-ink',
                   )
                 }
@@ -97,7 +93,7 @@ export function Sidebar() {
                     <item.icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? '' : 'opacity-80')} aria-hidden />
                     {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
                     {!effectiveCollapsed && isActive && (
-                      <motion.span layoutId="nav-active-dot" className="ml-auto h-1.5 w-1.5 rounded-full bg-primary-500" aria-hidden />
+                      <motion.span layoutId="nav-active-dot" className="ml-auto h-1.5 w-1.5 rounded-full bg-white" aria-hidden />
                     )}
                   </>
                 )}

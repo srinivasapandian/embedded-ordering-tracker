@@ -26,6 +26,7 @@ import { toast } from '@/store/toastStore'
 import { useSimulatedLoad } from '@/hooks/useSimulatedLoad'
 import { useDebounce } from '@/hooks/useDebounce'
 import { migrationForWebsite, primaryWebsite } from '@/utils/selectors'
+import { fmtDate } from '@/utils/date'
 import { cn } from '@/utils/cn'
 import { Badge, badgeDotClasses } from '@/components/common/Badge'
 import { Button } from '@/components/common/Button'
@@ -79,7 +80,7 @@ const STATUS_VALUES = ['active', 'in-progress', 'completed', 'blocked'] as const
 const STAGE_VALUES = ['onboarded', 'requirements', 'ordering', 'migration', 'qa', 'completed'] as const
 const PRIORITY_VALUES = ['high', 'medium', 'low'] as const
 const ORDERING_VALUES = ['active', 'in-progress', 'no-need', 'not-started'] as const
-const FRAMEWORK_VALUES = ['react', 'nextjs', 'html', 'shopify', 'wordpress', 'unknown'] as const
+const FRAMEWORK_VALUES = ['react', 'nextjs', 'html', 'shopify', 'wordpress', 'wix', 'unknown'] as const
 /** Migration "Target stack" only ever moves within the React → Next.js pipeline. */
 const MIGRATION_TARGET_VALUES = ['react', 'nextjs'] as const
 
@@ -165,6 +166,27 @@ export function ClientsManager({
         ),
       },
       {
+        id: 'liveLink',
+        meta: { label: 'Live Link' },
+        enableSorting: false,
+        accessorFn: (c) => primaryWebsite(websites, c.id)?.liveUrl ?? '',
+        header: () => 'Live Link',
+        cell: ({ row }) => {
+          const site = primaryWebsite(websites, row.original.id)
+          if (!site?.liveUrl) return <span className="text-sm text-faint">—</span>
+          return (
+            <a
+              href={site.liveUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium text-primary-600 underline-offset-2 hover:underline dark:text-primary-400"
+            >
+              {site.domain || site.liveUrl}
+            </a>
+          )
+        },
+      },
+      {
         id: 'technology',
         meta: { label: 'Technology' },
         accessorFn: (c) => primaryWebsite(websites, c.id)?.framework ?? '',
@@ -234,6 +256,60 @@ export function ClientsManager({
               disabledReason={denyReason}
               onSave={(v) => updateWebsite(site.id, { qaSignoff: v as QaSignoff })}
             />
+          )
+        },
+      },
+      {
+        id: 'deployedDate',
+        meta: { label: 'Deployed Date' },
+        accessorFn: (c) => primaryWebsite(websites, c.id)?.deployedDate ?? '',
+        header: ({ column }) => <SortableHeader column={column}>Deployed Date</SortableHeader>,
+        cell: ({ row }) => {
+          const site = primaryWebsite(websites, row.original.id)
+          return (
+            <span className="whitespace-nowrap text-xs text-sub">
+              {site?.deployedDate ? fmtDate(site.deployedDate) : '—'}
+            </span>
+          )
+        },
+      },
+      {
+        id: 'figmaLink',
+        meta: { label: 'Figma Design' },
+        enableSorting: false,
+        accessorFn: (c) => primaryWebsite(websites, c.id)?.figmaLink ?? '',
+        header: () => 'Figma Design',
+        cell: ({ row }) => {
+          const site = primaryWebsite(websites, row.original.id)
+          if (!site?.figmaLink) return <span className="text-sm text-faint">—</span>
+          return (
+            <a
+              href={site.figmaLink}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium text-primary-600 underline-offset-2 hover:underline dark:text-primary-400"
+            >
+              View design
+            </a>
+          )
+        },
+      },
+      {
+        id: 'repo',
+        meta: { label: 'Repository' },
+        enableSorting: false,
+        accessorFn: (c) => primaryWebsite(websites, c.id)?.repoName ?? '',
+        header: () => 'Repository',
+        cell: ({ row }) => {
+          const site = primaryWebsite(websites, row.original.id)
+          if (!site?.repoName) return <span className="text-sm text-faint">—</span>
+          return (
+            <div className="min-w-0 text-xs">
+              <p className="truncate font-medium text-ink">{site.repoName}</p>
+              <p className="truncate text-faint">
+                {site.devLatestBranch || '—'} → {site.releaseBranch || '—'}
+              </p>
+            </div>
           )
         },
       },
@@ -581,15 +657,22 @@ function clientFormSchema(websites: { domain: string }[], currentDomain: string 
     orderingStatus: z.enum(ORDERING_VALUES),
     orderingStage: z.string().optional(),
     qaSignoff: z.enum(QA_VALUES),
+    figmaLink: z.string().optional().or(z.literal('')),
+    deployedDate: z.string().optional().or(z.literal('')),
+    repoName: z.string().optional().or(z.literal('')),
+    devLatestBranch: z.string().optional().or(z.literal('')),
+    releaseBranch: z.string().optional().or(z.literal('')),
     // Migration (optional — only tracked once a website exists)
     migrationStage: z.union([z.enum(MIGRATION_STAGE_VALUES), z.literal('')]),
     migrationQuarter: z.string().optional(),
     targetStack: z.enum(MIGRATION_TARGET_VALUES),
     // Feature enablement
+    ordering: z.enum(CAPABILITY_STATE_VALUES),
     offers: z.enum(CAPABILITY_STATE_VALUES),
     loyalty: z.enum(CAPABILITY_STATE_VALUES),
     reservation: z.enum(CAPABILITY_STATE_VALUES),
     eventOrdering: z.enum(CAPABILITY_STATE_VALUES),
+    inFramework: z.enum(CAPABILITY_STATE_VALUES),
   })
 }
 
@@ -648,13 +731,20 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
       orderingStatus: site?.orderingStatus ?? 'not-started',
       orderingStage: site?.orderingStage ?? '',
       qaSignoff: site?.qaSignoff ?? 'pending',
+      figmaLink: site?.figmaLink ?? '',
+      deployedDate: site?.deployedDate ?? '',
+      repoName: site?.repoName ?? '',
+      devLatestBranch: site?.devLatestBranch ?? '',
+      releaseBranch: site?.releaseBranch ?? '',
       migrationStage: migration?.stage ?? '',
       migrationQuarter: migration?.quarter ?? '',
       targetStack: migration?.targetStack === 'react' ? 'react' : 'nextjs',
+      ordering: client?.capabilities.ordering ?? 'unavailable',
       offers: client?.capabilities.offers ?? 'unavailable',
       loyalty: client?.capabilities.loyalty ?? 'unavailable',
       reservation: client?.capabilities.reservation ?? 'unavailable',
       eventOrdering: client?.capabilities.eventOrdering ?? 'unavailable',
+      inFramework: client?.capabilities.inFramework ?? 'unavailable',
     },
   })
 
@@ -673,10 +763,12 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
           stage: values.stage,
           priority: values.priority,
           capabilities: {
+            ordering: values.ordering,
             offers: values.offers,
             loyalty: values.loyalty,
             reservation: values.reservation,
             eventOrdering: values.eventOrdering,
+            inFramework: values.inFramework,
           },
         })
 
@@ -690,6 +782,11 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
             orderingStatus: values.orderingStatus,
             orderingStage: values.orderingStage || site.orderingStage,
             qaSignoff: values.qaSignoff,
+            figmaLink: values.figmaLink || site.figmaLink,
+            deployedDate: values.deployedDate || site.deployedDate,
+            repoName: values.repoName || site.repoName,
+            devLatestBranch: values.devLatestBranch || site.devLatestBranch,
+            releaseBranch: values.releaseBranch || site.releaseBranch,
           })
         } else if (values.domain) {
           siteId = await addWebsite({
@@ -704,6 +801,11 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
             environment: values.environment,
             qaSignoff: values.qaSignoff,
             liveUrl: values.liveUrl || `https://${values.domain}`,
+            figmaLink: values.figmaLink || '',
+            deployedDate: values.deployedDate || null,
+            repoName: values.repoName || '',
+            devLatestBranch: values.devLatestBranch || '',
+            releaseBranch: values.releaseBranch || '',
           })
         }
 
@@ -748,11 +850,18 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
           orderingStatus: values.orderingStatus,
           orderingStage: values.orderingStage,
           qaSignoff: values.qaSignoff,
+          figmaLink: values.figmaLink,
+          deployedDate: values.deployedDate || null,
+          repoName: values.repoName,
+          devLatestBranch: values.devLatestBranch,
+          releaseBranch: values.releaseBranch,
           capabilities: {
+            ordering: values.ordering,
             offers: values.offers,
             loyalty: values.loyalty,
             reservation: values.reservation,
             eventOrdering: values.eventOrdering,
+            inFramework: values.inFramework,
           },
           migrationStage: values.migrationStage || undefined,
           migrationQuarter: values.migrationQuarter,
@@ -859,6 +968,14 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
               ))}
             </Select>
           </FormField>
+          <FormField label="Figma design link" htmlFor="cf-figma" className="col-span-2">
+            <Input
+              id="cf-figma"
+              placeholder="https://www.figma.com/design/…"
+              disabled={!hasSite}
+              {...register('figmaLink')}
+            />
+          </FormField>
         </DrawerSection>
 
         <DrawerSection title="Ordering & QA">
@@ -887,6 +1004,21 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
                 </option>
               ))}
             </Select>
+          </FormField>
+          <FormField label="Deployed to live date" htmlFor="cf-deployed-date">
+            <Input id="cf-deployed-date" type="date" disabled={!hasSite} {...register('deployedDate')} />
+          </FormField>
+        </DrawerSection>
+
+        <DrawerSection title="Repository">
+          <FormField label="Repo name" htmlFor="cf-repo-name">
+            <Input id="cf-repo-name" placeholder="org/client-site" disabled={!hasSite} {...register('repoName')} />
+          </FormField>
+          <FormField label="Dev latest branch" htmlFor="cf-dev-branch">
+            <Input id="cf-dev-branch" placeholder="main" disabled={!hasSite} {...register('devLatestBranch')} />
+          </FormField>
+          <FormField label="Release branch" htmlFor="cf-release-branch">
+            <Input id="cf-release-branch" placeholder="release" disabled={!hasSite} {...register('releaseBranch')} />
           </FormField>
         </DrawerSection>
 
@@ -929,6 +1061,15 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
         </DrawerSection>
 
         <DrawerSection title="Feature enablement">
+          <FormField label="Ordering" htmlFor="cf-ordering-capability">
+            <Select id="cf-ordering-capability" {...register('ordering')}>
+              {CAPABILITY_STATES_ORDERED.map((v) => (
+                <option key={v} value={v}>
+                  {CAPABILITY_STATE_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
           <FormField label="Offers" htmlFor="cf-offers">
             <Select id="cf-offers" {...register('offers')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
@@ -958,6 +1099,15 @@ function ClientFormDrawer({ client, onClose }: { client: Client | null; onClose:
           </FormField>
           <FormField label="Event ordering" htmlFor="cf-event-ordering">
             <Select id="cf-event-ordering" {...register('eventOrdering')}>
+              {CAPABILITY_STATES_ORDERED.map((v) => (
+                <option key={v} value={v}>
+                  {CAPABILITY_STATE_LABELS[v]}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+          <FormField label="In framework" htmlFor="cf-in-framework">
+            <Select id="cf-in-framework" {...register('inFramework')}>
               {CAPABILITY_STATES_ORDERED.map((v) => (
                 <option key={v} value={v}>
                   {CAPABILITY_STATE_LABELS[v]}

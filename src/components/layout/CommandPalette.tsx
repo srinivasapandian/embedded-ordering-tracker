@@ -3,9 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Boxes,
   CornerDownLeft,
-  GitBranch,
   Globe,
   LayoutDashboard,
   Moon,
@@ -13,6 +11,7 @@ import {
   Search,
   ShieldCheck,
   Sun,
+  Table2,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -68,11 +67,9 @@ export function CommandPalette() {
     () => [
       { id: 'nav-dashboard', group: 'Commands', label: 'Go to Dashboard', icon: LayoutDashboard, perform: () => go('/dashboard') },
       { id: 'nav-clients', group: 'Commands', label: 'Go to Client Tracker', icon: Users, perform: () => go('/clients') },
-      { id: 'nav-features', group: 'Commands', label: 'Go to Features', icon: Boxes, perform: () => go('/features') },
-      { id: 'nav-migration', group: 'Commands', label: 'Go to Migration', icon: GitBranch, perform: () => go('/migration') },
+      { id: 'nav-master-tracker', group: 'Commands', label: 'Go to Master Tracker', icon: Table2, perform: () => go('/master-tracker') },
       { id: 'nav-admin', group: 'Commands', label: 'Go to Admin Panel', icon: ShieldCheck, perform: () => go('/admin') },
       { id: 'create-client', group: 'Commands', label: 'Create Client', keywords: 'new add', icon: Plus, perform: () => go('/clients?new=1') },
-      { id: 'start-migration', group: 'Commands', label: 'Start Migration', keywords: 'new add create', icon: Plus, perform: () => go('/migration?new=1') },
       {
         id: 'toggle-theme',
         group: 'Commands',
@@ -120,7 +117,7 @@ export function CommandPalette() {
         label: w.name,
         sublabel: w.domain,
         icon: Globe,
-        perform: () => go(`/admin?tab=websites&q=${encodeURIComponent(w.name)}`),
+        perform: () => go(`/clients?highlight=${w.clientId}`),
       }))
 
     const memberMatches: PaletteItem[] = teamMembers

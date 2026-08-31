@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import { GitBranch } from 'lucide-react'
 import { AnimatedNumber } from '@/components/common/AnimatedNumber'
 import { DonutChart } from '@/components/common/DonutChart'
+import { EmptyState } from '@/components/common/EmptyState'
 import { FrameworkMigrationLabel, MigrationPipeline } from '@/components/common/MigrationPipeline'
 import { ProgressBar } from '@/components/common/ProgressBar'
 import { SectionHeader } from '@/components/common/SectionHeader'
@@ -37,6 +40,7 @@ export function MigrationOverview() {
   const websites = useAppStore((s) => s.websites)
   const migrations = useAppStore((s) => s.migrations)
   const m = useMemo(() => migrationMetrics(websites, migrations), [websites, migrations])
+  const navigate = useNavigate()
 
   return (
     <section aria-label="React to Next.js migration overview">
@@ -45,8 +49,18 @@ export function MigrationOverview() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.1, ease: 'easeOut' }}
-        className="app-card p-4"
+        className={m.totalWebsites === 0 ? 'app-card' : 'app-card p-4'}
       >
+        {m.totalWebsites === 0 ? (
+          <EmptyState
+            icon={GitBranch}
+            title="No websites tracked yet"
+            description="Add a client with a website from the Admin Panel to start tracking the React → Next.js migration."
+            actionLabel="Go to Admin Panel"
+            onAction={() => navigate('/admin')}
+          />
+        ) : (
+        <>
         <div className="gap-6 xl:grid xl:grid-cols-3">
           {/* Donut + legend */}
           <div className="flex flex-col items-center justify-center gap-3 py-1">
@@ -114,6 +128,8 @@ export function MigrationOverview() {
           </div>
           <MigrationPipeline byStage={m.byStage} />
         </div>
+        </>
+        )}
       </motion.div>
     </section>
   )

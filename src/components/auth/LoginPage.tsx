@@ -47,11 +47,11 @@ export function LoginPage() {
   })
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <h1 className="text-lg font-bold tracking-tight text-ink">Brisque Ops</h1>
-          <p className="mt-1 text-sm text-sub">Sign in to the operations console</p>
+          <img src="/new.webp" alt="Brisque" className="mx-auto h-10 w-auto object-contain" />
+          <p className="mt-2 text-sm text-sub">Sign in to the operations console</p>
         </div>
 
         <form onSubmit={(e) => void onSubmit(e)} className="app-card space-y-4 p-6">

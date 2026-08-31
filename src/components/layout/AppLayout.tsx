@@ -44,7 +44,7 @@ export function AppLayout() {
   useFirestoreSync()
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <div className="flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
@@ -56,7 +56,7 @@ export function AppLayout() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
-                className="mx-auto w-full max-w-[1600px] px-5 py-5 2xl:px-8"
+                className="mx-auto w-full max-w-[1600px] px-5 py-5 lg:px-6 2xl:px-8"
               >
                 <Outlet />
               </motion.div>

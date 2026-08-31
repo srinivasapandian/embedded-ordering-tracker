@@ -38,6 +38,7 @@ const STATUS_CONFIG: Record<AnyStatus, { label: string; tone: BadgeTone }> = {
   html: { label: 'HTML', tone: 'slate' },
   shopify: { label: 'Shopify', tone: 'emerald' },
   wordpress: { label: 'WordPress', tone: 'violet' },
+  wix: { label: 'WIX', tone: 'amber' },
   unknown: { label: 'Unknown', tone: 'slate' },
 }
 

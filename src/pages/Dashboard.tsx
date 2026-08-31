@@ -10,7 +10,7 @@ export default function Dashboard() {
     <>
       <PageHeader
         title="Operations Overview"
-        description="Track embedded ordering rollout, migration progress and client readiness across the website portfolio."
+        description="Real-time snapshot of rollout, migration and client readiness."
       />
       <div className="space-y-7">
         <KpiStrip />
